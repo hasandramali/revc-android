@@ -12,7 +12,6 @@ public:
 	static uint32 ms_nMillisecondsPerGameMinute;
 	static uint32 ms_nLastClockTick;
 	static bool   ms_bClockHasBeenStored;
-	static float  ms_EnvMapTimeMultiplicator;
 
 	static void Initialise(uint32 scale);
 	static void Update(void);
@@ -21,8 +20,6 @@ public:
 	static bool GetIsTimeInRange(uint8 h1, uint8 h2);
 	static void StoreClock(void);
 	static void RestoreClock(void);
-
-	static void CalcEnvMapTimeMultiplicator(void);
 
 	static uint8 GetHours(void) { return ms_nGameClockHours; }
 	static uint8 GetMinutes(void) { return ms_nGameClockMinutes; }

@@ -107,8 +107,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang
     if (NOT LIBRW_PLATFORM_PS2)
         target_compile_options(${EXECUTABLE}
             PRIVATE
-                -fpermissive # for CVECTORHACK
-                -Wno-address-of-temporary # for CVECTORHACK
                 -Wextra
                 -Wdouble-promotion
                 -Wpedantic

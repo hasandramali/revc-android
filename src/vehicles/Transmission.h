@@ -17,7 +17,6 @@ public:
 	int8 nNumberOfGears;
 	uint8 Flags;
 	float fEngineAcceleration;
-	float fEngineInertia;
 	float fMaxVelocity;
 	float fMaxCruiseVelocity;
 	float fMaxReverseVelocity;
@@ -25,6 +24,5 @@ public:
 
 	void InitGearRatios(void);
 	void CalculateGearForSimpleCar(float speed, uint8 &gear);
-	float CalculateDriveAcceleration(const float &gasPedal, uint8 &gear, float &time, const float &velocity, float *inertiaVar1, float *inertiaVar2, uint8 nDriveWheels, uint8 cheat);
 	float CalculateDriveAcceleration(const float &gasPedal, uint8 &gear, float &time, const float &velocity, bool cheat);
 };

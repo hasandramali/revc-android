@@ -1,7 +1,5 @@
 #include "common.h"
 
-#include "main.h"
-#include "smallHeap.h"
 #include "templates.h"
 #include "General.h"
 #include "Streaming.h"
@@ -11,19 +9,13 @@
 CPool<TxdDef,TxdDef> *CTxdStore::ms_pTxdPool;
 RwTexDictionary *CTxdStore::ms_pStoredTxd;
 
-// LCS: file done except unused:
-// CTexListStore::RemoveTexListChunk(int)
-// CTexListStore::validateRefs(void)
-// CTexListStore::Write(base::cRelocatableChunkWriter &)
-
 void
 CTxdStore::Initialise(void)
 {
-	if(gMakeResources && ms_pTxdPool == nil)
+	if(ms_pTxdPool == nil)
 		ms_pTxdPool = new CPool<TxdDef,TxdDef>(TXDSTORESIZE, "TexDictionary");
 }
 
-// removed in LCS but we should probably keep it
 void
 CTxdStore::Shutdown(void)
 {
@@ -31,7 +23,6 @@ CTxdStore::Shutdown(void)
 		delete ms_pTxdPool;
 }
 
-// removed in LCS but we should probably keep it
 void
 CTxdStore::GameShutdown(void)
 {
@@ -51,7 +42,6 @@ CTxdStore::AddTxdSlot(const char *name)
 	assert(def);
 	def->texDict = nil;
 	def->refCount = 0;
-	def->refCountGu = 0;
 	strcpy(def->name, name);
 	return ms_pTxdPool->GetJustIndex(def);
 }
@@ -105,11 +95,7 @@ CTxdStore::SetCurrentTxd(int slot)
 void
 CTxdStore::Create(int slot)
 {
-	TxdDef *def = GetSlot(slot);
-	def->texDict = RwTexDictionaryCreate();
-	// LCS: mobile sets the txd name here, but txds don't really have names
-	def->refCount = 0;
-	def->refCountGu = 0;
+	GetSlot(slot)->texDict = RwTexDictionaryCreate();
 }
 
 int
@@ -125,33 +111,10 @@ CTxdStore::AddRef(int slot)
 }
 
 void
-CTxdStore::AddRefEvenIfNotInMemory(int slot)
-{
-	GetSlot(slot)->refCount++;
-}
-
-void
-CTxdStore::AddRefGu(int slot)
-{
-	TxdDef *def = GetSlot(slot);
-	def->refCount++;
-	def->refCountGu++;
-}
-
-void
 CTxdStore::RemoveRef(int slot)
 {
 	if(--GetSlot(slot)->refCount <= 0)
 		CStreaming::RemoveTxd(slot);
-}
-
-void
-CTxdStore::RemoveRefGu(int slot)
-{
-	TxdDef *def = GetSlot(slot);
-	def->refCount--;
-	if(gUseChunkFiles)
-		def->refCountGu--;
 }
 
 void
@@ -165,29 +128,12 @@ CTxdStore::LoadTxd(int slot, RwStream *stream)
 {
 	TxdDef *def = GetSlot(slot);
 
-	if(stream){
-		if(RwStreamFindChunk(stream, rwID_TEXDICTIONARY, nil, nil)){
-			def->texDict = RwTexDictionaryGtaStreamRead(stream);
-			return def->texDict != nil;
-		}
-	}else{
-		// TODO(LCS)? fall back reading from file
+	if(RwStreamFindChunk(stream, rwID_TEXDICTIONARY, nil, nil)){
+		def->texDict = RwTexDictionaryGtaStreamRead(stream);
+		return def->texDict != nil;
 	}
 	printf("Failed to load TXD\n");
 	return false;
-}
-
-bool
-CTxdStore::LoadTxd(int slot, void *data, void *chunk)
-{
-	TxdDef *def = GetSlot(slot);
-	def->texDict = (RwTexDictionary*)data;
-	if(strncasecmp(def->name, "radar", 5) == 0){
-		def->refCount = 0;
-		def->refCountGu = 0;
-	}
-	CStreaming::RegisterPointer(&def->texDict, 3, true);
-	return def->texDict != nil;
 }
 
 bool
@@ -206,7 +152,6 @@ CTxdStore::LoadTxd(int slot, const char *filename)
 	return ret;
 }
 
-// removed in LCS but we should probably keep it
 bool
 CTxdStore::StartLoadTxd(int slot, RwStream *stream)
 {
@@ -220,7 +165,6 @@ CTxdStore::StartLoadTxd(int slot, RwStream *stream)
 	}
 }
 
-// removed in LCS but we should probably keep it
 bool
 CTxdStore::FinishLoadTxd(int slot, RwStream *stream)
 {
@@ -230,31 +174,10 @@ CTxdStore::FinishLoadTxd(int slot, RwStream *stream)
 }
 
 void
-CTxdStore::RemoveTxd(int slot, bool notChunk)
+CTxdStore::RemoveTxd(int slot)
 {
 	TxdDef *def = GetSlot(slot);
-	if(def->texDict){
-		if(!gUseChunkFiles || notChunk)
-			RwTexDictionaryDestroy(def->texDict);
-		else{
-			// TODO? Rsl3D specific: RslTextureDestroyDispList for all textures
-			CStreaming::UnregisterPointer(&def->texDict, 3);
-			cSmallHeap::msInstance.Free(def->texDict);
-		}
-	}
+	if(def->texDict)
+		RwTexDictionaryDestroy(def->texDict);
 	def->texDict = nil;
-	def->refCount = 0;
-	def->refCountGu = 0;
-}
-
-void
-CTxdStore::Load(RwTexDictionary *stored, CPool<TxdDef> *pool)
-{
-	ms_pTxdPool = pool;
-	ms_pStoredTxd = stored;
-	for(int i = 0; i < TXDSTORESIZE; i++){
-		TxdDef *def = GetSlot(i);
-		if(def)
-			def->refCount = def->texDict != nil;
-	}
 }

@@ -102,6 +102,4 @@ public:
 	static void RenderTransparentWater(void);	// keep-out polys and transparent water
 #endif
 	static void InsertEntityIntoList(CEntity *ent);
-
-	static void GenerateEnvironmentMap(void);
 };

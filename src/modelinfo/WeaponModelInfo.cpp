@@ -4,9 +4,6 @@
 #include "AnimManager.h"
 #include "VisibilityPlugins.h"
 
-base::cRelocatableChunkClassInfo CWeaponModelInfo::msClassInfo("CWeaponModelInfo", VTABLE_ADDR(&msClassInstance), sizeof(msClassInstance));
-CWeaponModelInfo CWeaponModelInfo::msClassInstance;
-
 void
 CWeaponModelInfo::SetAnimFile(const char *file)
 {
@@ -38,34 +35,19 @@ CWeaponModelInfo::Init(void)
 void
 CWeaponModelInfo::SetWeaponInfo(int32 weaponId)
 {
-	m_relatedModel = (CSimpleModelInfo*)weaponId;
+	m_atomics[2] = (RpAtomic*)weaponId;
 }
 
 eWeaponType
 CWeaponModelInfo::GetWeaponInfo(void)
 {
-	return (eWeaponType)(uintptr)m_relatedModel;
+	return (eWeaponType)(uintptr)m_atomics[2];
 }
 
-/*
 void
 CWeaponModelInfo::SetAtomic(int n, RpAtomic *atomic)
 {
 	CSimpleModelInfo::SetAtomic(n, atomic);
 	CVisibilityPlugins::SetAtomicRenderCallback(atomic, CVisibilityPlugins::RenderWeaponCB);
 }
-*/
 
-void
-CWeaponModelInfo::RcWriteThis(base::cRelocatableChunkWriter &writer)
-{
-	writer.AllocateRaw(this, sizeof(*this), sizeof(void*), false, true);
-	writer.Class(VTABLE_ADDR(this), msClassInfo);
-}
-
-void
-CWeaponModelInfo::RcWriteEmpty(base::cRelocatableChunkWriter &writer)
-{
-	writer.AllocateRaw(this, sizeof(*this), sizeof(void*), false, true);
-	writer.Class(VTABLE_ADDR(this), msClassInfo);
-}

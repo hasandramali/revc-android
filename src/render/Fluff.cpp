@@ -417,9 +417,8 @@ void CMovingThings::Init()
 		}
 	}
 
-// LCS: removed
-//	CEscalators::Init();
-//	aScrollBars[0].Init(CVector(-1069.209f, 1320.126f, 18.848f), CVector(-1069.209f, 1342.299f, 22.612f), SCROLL_ARENA_STRING, 128, 255, 0, 0.3f);
+	CEscalators::Init();
+	aScrollBars[0].Init(CVector(-1069.209f, 1320.126f, 18.848f), CVector(-1069.209f, 1342.299f, 22.612f), SCROLL_ARENA_STRING, 128, 255, 0, 0.3f);
 }
 
 void CMovingThings::Shutdown()
@@ -460,6 +459,7 @@ void CMovingThings::Update()
 
 void CMovingThings::Render()
 {
+	PUSH_RENDERGROUP("CMovingThings::Render");
 	CSmokeTrails::Update();
 
 	int i;
@@ -472,6 +472,7 @@ void CMovingThings::Render()
 	CPlaneTrails::Render();
 	CSmokeTrails::Render();
 	CPlaneBanners::Render();
+	POP_RENDERGROUP();
 }
 
 void CMovingThings::RegisterOne(CEntity *pEnt, uint16 nType) {

@@ -164,8 +164,8 @@ cMusicManager::SetStartingTrackPositions(uint8 isNewGameTimer)
 
 			if (i < STREAMED_SOUND_CITY_AMBIENT && isNewGameTimer)
 				m_aTracks[i].m_nPosition = NewGameRadioTimers[i];
-			//else if (i < STREAMED_SOUND_ANNOUNCE_BRIDGE_CLOSED)
-			//	m_aTracks[i].m_nPosition = (pos * AudioManager.GetRandomNumber(i % 5)) % m_aTracks[i].m_nLength;
+			else if (i < STREAMED_SOUND_ANNOUNCE_BRIDGE_CLOSED)
+				m_aTracks[i].m_nPosition = (pos * AudioManager.GetRandomNumber(i % 5)) % m_aTracks[i].m_nLength;
 			else
 				m_aTracks[i].m_nPosition = 0;
 			
@@ -578,7 +578,7 @@ cMusicManager::ServiceGameMode()
 		if (!m_bRadioStreamReady)
 		{
 			if(vehicle == nil) {
-				m_nFrontendTrack = STREAMED_SOUND_RADIO_LCFR; // huh?
+				m_nFrontendTrack = STREAMED_SOUND_RADIO_WAVE; // huh?
 				return;
 			}
 			if(m_bRadioSetByScript) {
@@ -751,7 +751,7 @@ cMusicManager::SetUpCorrectAmbienceTrack()
 		else if (TheCamera.DistanceToWater <= 90.0f) {
 			if (CCullZones::bAtBeachForAudio) {
 				if (CWeather::OldWeatherType != WEATHER_HURRICANE && CWeather::NewWeatherType != WEATHER_HURRICANE || CWeather::Wind <= 1.0f)
-					m_nFrontendTrack = STREAMED_SOUND_SAWMILL;
+					m_nFrontendTrack = STREAMED_SOUND_BEACH_AMBIENT;
 				else
 					m_nFrontendTrack = STREAMED_SOUND_HAVANA_BEACH_AMBIENT;
 			}
@@ -1299,12 +1299,31 @@ cMusicManager::DisplayRadioStationName()
 			case RADIO_ESPANTOSO: string = TheText.Get("FEA_FM6"); break;
 			case EMOTION: string = TheText.Get("FEA_FM7"); break;
 			case WAVE: string = TheText.Get("FEA_FM8"); break;
-			case 9: string = TheText.Get("FEA_FM9"); break;
-			case 10:
+			case USERTRACK:
 				if (!SampleManager.IsMP3RadioChannelAvailable())
 					return;
 				string = TheText.Get("FEA_MP3"); break;
-			default: string = TheText.Get("FEA_NON"); break;
+#ifdef RADIO_OFF_TEXT
+			case STREAMED_SOUND_RADIO_POLICE:
+			case STREAMED_SOUND_RADIO_TAXI:
+				return;
+			default: {
+				// Otherwise pausing-resuming game will show RADIO OFF, since radio isn't set yet
+				if (m_nPlayingTrack == NO_TRACK && m_nFrontendTrack == NO_TRACK)
+					return;
+
+				extern wchar WideErrorString[];
+
+				string = TheText.Get("FEA_NON");
+				if (string == WideErrorString) {
+					pCurrentStation = nil;
+					return;
+				}
+				break;
+			}
+#else
+			default: return;
+#endif
 			};
 
 			if (pCurrentStation != string) {
@@ -1318,22 +1337,21 @@ cMusicManager::DisplayRadioStationName()
 
 			CFont::SetJustifyOff();
 			CFont::SetBackgroundOff();
-			CFont::SetDropShadowPosition(2);
-			CFont::SetScale(PSP_SCREEN_SCALE_X(0.5f), PSP_SCREEN_SCALE_Y(0.88f));
+			CFont::SetScale(SCREEN_SCALE_X(0.8f), SCREEN_SCALE_Y(1.35f));
 			CFont::SetPropOn();
-			CFont::SetFontStyle(FONT_BANK);
+			CFont::SetFontStyle(FONT_STANDARD);
 			CFont::SetCentreOn();
-			CFont::SetCentreSize(PSP_SCREEN_SCALE_X(260.0f));
-			CFont::SetDropColor(CRGBA(0, 0, 0, 255));
+			CFont::SetCentreSize(SCREEN_STRETCH_X(DEFAULT_SCREEN_WIDTH));
+			CFont::SetColor(CRGBA(0, 0, 0, 255));
+			CFont::PrintString(SCREEN_WIDTH / 2 + SCREEN_SCALE_X(2.0f), SCREEN_SCALE_Y(22.0f) + SCREEN_SCALE_Y(2.0f), pCurrentStation);
 
 			if (gNumRetunePresses)
-				CFont::SetColor(CRGBA(77, 155, 210, 255));
+				CFont::SetColor(CRGBA(102, 133, 143, 255));
 			else
-				CFont::SetColor(CRGBA(77, 155, 210, 255));
+				CFont::SetColor(CRGBA(147, 196, 211, 255));
 
-			CFont::PrintString(SCREEN_WIDTH / 2, PSP_SCREEN_SCALE_Y(7.0f), pCurrentStation);
+			CFont::PrintString(SCREEN_WIDTH / 2, SCREEN_SCALE_Y(22.0f), pCurrentStation);
 			CFont::DrawFonts();
-			CFont::SetCentreSize(SCREEN_STRETCH_X(DEFAULT_SCREEN_WIDTH));
 		}
 	}
 	// Always show station text after entering car. Same behaviour as III and SA.
@@ -1364,7 +1382,7 @@ cMusicManager::UsesPoliceRadio(CVehicle *veh)
 bool
 cMusicManager::UsesTaxiRadio(CVehicle *veh)
 {
-	if (veh->GetModelIndex() != MI_CABBIE) return false;
+	if (veh->GetModelIndex() != MI_KAUFMAN) return false;
 	return CTheScripts::bPlayerHasMetDebbieHarry;
 }
 

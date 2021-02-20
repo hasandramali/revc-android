@@ -7,6 +7,7 @@
 #error "Need librw for EXTENDED_COLOURFILTER"
 #endif
 
+#include "main.h"
 #include "RwHelper.h"
 #include "Camera.h"
 #include "MBlur.h"
@@ -15,25 +16,23 @@
 RwRaster *CPostFX::pFrontBuffer;
 RwRaster *CPostFX::pBackBuffer;
 bool CPostFX::bJustInitialised;
-int CPostFX::EffectSwitch = POSTFX_PS2;
+int CPostFX::EffectSwitch = POSTFX_NORMAL;
 bool CPostFX::BlurOn = false;
 bool CPostFX::MotionBlurOn = false;
 
 static RwIm2DVertex Vertex[4];
 static RwIm2DVertex Vertex2[4];
 static RwImVertexIndex Index[6] = { 0, 1, 2, 0, 2, 3 };
-static RwIm2DVertex BlurVertex[12];
-static RwImVertexIndex BlurIndex[18] = { 0, 1, 2, 0, 2, 3,  4, 5, 6, 4, 6, 7,  8, 9, 10, 8, 10, 11 };
 
 #ifdef RW_D3D9
-void *colourfilterLCS_PS;
+void *colourfilterVC_PS;
 void *contrast_PS;
 #endif
 #ifdef RW_OPENGL
 int32 u_blurcolor;
 int32 u_contrastAdd;
 int32 u_contrastMult;
-rw::gl3::Shader *colourFilterLCS;
+rw::gl3::Shader *colourFilterVC;
 rw::gl3::Shader *contrast;
 #endif
 
@@ -144,8 +143,8 @@ CPostFX::Open(RwCamera *cam)
 
 
 #ifdef RW_D3D9
-#include "shaders/obj/colourfilterLCS_PS.inc"
-	colourfilterLCS_PS = rw::d3d::createPixelShader(colourfilterLCS_PS_cso);
+#include "shaders/obj/colourfilterVC_PS.inc"
+	colourfilterVC_PS = rw::d3d::createPixelShader(colourfilterVC_PS_cso);
 #include "shaders/obj/contrastPS.inc"
 	contrast_PS = rw::d3d::createPixelShader(contrastPS_cso);
 #endif
@@ -154,11 +153,11 @@ CPostFX::Open(RwCamera *cam)
 
 	{
 #include "shaders/obj/im2d_vert.inc"
-#include "shaders/obj/colourfilterLCS_frag.inc"
+#include "shaders/obj/colourfilterVC_frag.inc"
 	const char *vs[] = { shaderDecl, header_vert_src, im2d_vert_src, nil };
-	const char *fs[] = { shaderDecl, header_frag_src, colourfilterLCS_frag_src, nil };
-	colourFilterLCS = Shader::create(vs, fs);
-	assert(colourFilterLCS);
+	const char *fs[] = { shaderDecl, header_frag_src, colourfilterVC_frag_src, nil };
+	colourFilterVC = Shader::create(vs, fs);
+	assert(colourFilterVC);
 	}
 
 	{
@@ -185,9 +184,9 @@ CPostFX::Close(void)
 		pBackBuffer = nil;
 	}
 #ifdef RW_D3D9
-	if(colourfilterLCS_PS){
-		rw::d3d::destroyPixelShader(colourfilterLCS_PS);
-		colourfilterLCS_PS = nil;
+	if(colourfilterVC_PS){
+		rw::d3d::destroyPixelShader(colourfilterVC_PS);
+		colourfilterVC_PS = nil;
 	}
 	if(contrast_PS){
 		rw::d3d::destroyPixelShader(contrast_PS);
@@ -195,9 +194,9 @@ CPostFX::Close(void)
 	}
 #endif
 #ifdef RW_OPENGL
-	if(colourFilterLCS){
-		colourFilterLCS->destroy();
-		colourFilterLCS = nil;
+	if(colourFilterVC){
+		colourFilterVC->destroy();
+		colourFilterVC = nil;
 	}
 	if(contrast){
 		contrast->destroy();
@@ -206,44 +205,9 @@ CPostFX::Close(void)
 #endif
 }
 
-static float blurOffset = 0.6f;//3.0f/16.0f;	// not quite sure sure about this
-static float blurIntensity = 0.25f;
-
 void
 CPostFX::RenderOverlayBlur(RwCamera *cam, int32 r, int32 g, int32 b, int32 a)
 {
-	memcpy(BlurVertex, Vertex, sizeof(Vertex));
-	memcpy(BlurVertex+4, Vertex, sizeof(Vertex));
-	memcpy(BlurVertex+8, Vertex, sizeof(Vertex));
-	int intensity = 255*blurIntensity;
-	int i;
-	for(i = 0; i < 4; i++){
-		RwIm2DVertexSetScreenX(&BlurVertex[i], RwIm2DVertexGetScreenX(&BlurVertex[i]) + blurOffset);
-		RwIm2DVertexSetIntRGBA(&BlurVertex[i], 255, 255, 255, intensity);
-	}
-	for(i = 4; i < 8; i++){
-		RwIm2DVertexSetScreenX(&BlurVertex[i], RwIm2DVertexGetScreenX(&BlurVertex[i]) + blurOffset);
-		RwIm2DVertexSetScreenY(&BlurVertex[i], RwIm2DVertexGetScreenY(&BlurVertex[i]) + blurOffset);
-		RwIm2DVertexSetIntRGBA(&BlurVertex[i], 255, 255, 255, intensity);
-	}
-	for(i = 8; i < 12; i++){
-		RwIm2DVertexSetScreenY(&BlurVertex[i], RwIm2DVertexGetScreenY(&BlurVertex[i]) + blurOffset);
-		RwIm2DVertexSetIntRGBA(&BlurVertex[i], 255, 255, 255, intensity);
-	}
-
-	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, pBackBuffer);
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
-
-	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, BlurVertex, 12, BlurIndex, 18);
-
-	// this sucks: should render colourfilter with blending instead
-	// but can't change equation to subtraction for PSP here
-	GetBackBuffer(cam);
-
-/* the old way
 	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, pFrontBuffer);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 
@@ -276,7 +240,6 @@ CPostFX::RenderOverlayBlur(RwCamera *cam, int32 r, int32 g, int32 b, int32 a)
 
 	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, Vertex, 4, Index, 6);
 	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, BlurOn ? Vertex2 : Vertex, 4, Index, 6);
-*/
 }
 
 void
@@ -328,15 +291,15 @@ CPostFX::RenderOverlayShader(RwCamera *cam, int32 r, int32 g, int32 b, int32 a)
 		blurcolors[0] = r*f/255.0f;
 		blurcolors[1] = g*f/255.0f;
 		blurcolors[2] = b*f/255.0f;
-		blurcolors[3] = EffectSwitch == POSTFX_PSP ? -1.0f : 1.0f;
+		blurcolors[3] = 30/255.0f;
 #ifdef RW_D3D9
 		rw::d3d::d3ddevice->SetPixelShaderConstantF(10, blurcolors, 1);
-		rw::d3d::im2dOverridePS = colourfilterLCS_PS;
+		rw::d3d::im2dOverridePS = colourfilterVC_PS;
 #endif
 #ifdef RW_OPENGL
-		rw::gl3::im2dOverrideShader = colourFilterLCS;
-		colourFilterLCS->use();
-		glUniform4fv(colourFilterLCS->uniformLocations[u_blurcolor], 1, blurcolors);
+		rw::gl3::im2dOverrideShader = colourFilterVC;
+		colourFilterVC->use();
+		glUniform4fv(colourFilterVC->uniformLocations[u_blurcolor], 1, blurcolors);
 #endif
 	}
 	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, Vertex, 4, Index, 6);
@@ -376,8 +339,11 @@ CPostFX::NeedBackBuffer(void)
 	case POSTFX_SIMPLE:
 		// no actual rendering here
 		return false;
-	case POSTFX_PSP:
-	case POSTFX_PS2:
+	case POSTFX_NORMAL:
+		if(MotionBlurOn)
+			return false;
+		else
+			return true;
 	case POSTFX_MOBILE:
 		return true;
 	}
@@ -388,11 +354,24 @@ bool
 CPostFX::NeedFrontBuffer(int32 type)
 {
 	// Last frame -- needed for motion blur
-	if(MotionBlurOn)
+	if(CMBlur::Drunkness > 0.0f)
 		return true;
 	if(type == MOTION_BLUR_SNIPER)
 		return true;
 
+	switch(EffectSwitch){
+	case POSTFX_OFF:
+	case POSTFX_SIMPLE:
+		// no actual rendering here
+		return false;
+	case POSTFX_NORMAL:
+		if(MotionBlurOn)
+			return true;
+		else
+			return false;
+	case POSTFX_MOBILE:
+		return false;
+	}
 	return false;
 }
 
@@ -407,17 +386,13 @@ CPostFX::GetBackBuffer(RwCamera *cam)
 void
 CPostFX::Render(RwCamera *cam, uint32 red, uint32 green, uint32 blue, uint32 blur, int32 type, uint32 bluralpha)
 {
-	// LCS PS2 blur is drawn in three passes:
-	//  blend frame with current frame 3 times to blur a bit
-	//  blend one more time with colour filter
-	//  motion blur like normal
+	PUSH_RENDERGROUP("CPostFX::Render");
 
 	if(pFrontBuffer == nil)
 		Open(cam);
 	assert(pFrontBuffer);
 	assert(pBackBuffer);
 
-/*	// LCS: don't need that anymore
 	if(type == MOTION_BLUR_LIGHT_SCENE){
 		SmoothColor(red, green, blue, blur);
 		red = AvgRed;
@@ -425,7 +400,6 @@ CPostFX::Render(RwCamera *cam, uint32 red, uint32 green, uint32 blue, uint32 blu
 		blue = AvgBlue;
 		blur = AvgAlpha;
 	}
-*/
 
 	if(NeedBackBuffer())
 		GetBackBuffer(cam);
@@ -433,15 +407,10 @@ CPostFX::Render(RwCamera *cam, uint32 red, uint32 green, uint32 blue, uint32 blu
 	DefinedState();
 
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
+	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 
-	if(BlurOn)
-		RenderOverlayBlur(cam, 0, 0, 0, 0);
-
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERNEAREST);
-
-	// TODO(LCS): check this out
 	if(type == MOTION_BLUR_SNIPER){
 		if(!bJustInitialised)
 			RenderOverlaySniper(cam, red, green, blue, blur);
@@ -450,16 +419,21 @@ CPostFX::Render(RwCamera *cam, uint32 red, uint32 green, uint32 blue, uint32 blu
 	case POSTFX_SIMPLE:
 		// no actual rendering here
 		break;
-	case POSTFX_PSP:
-	case POSTFX_PS2:
+	case POSTFX_NORMAL:
+		if(MotionBlurOn){
+			if(!bJustInitialised)
+				RenderOverlayBlur(cam, red, green, blue, blur);
+		}else{
+			RenderOverlayShader(cam, red, green, blue, blur);
+		}
+		break;
 	case POSTFX_MOBILE:
 		RenderOverlayShader(cam, red, green, blue, blur);
 		break;
 	}
 
-	if(MotionBlurOn)
-		if(!bJustInitialised)
-			RenderMotionBlur(cam, bluralpha);
+	if(!bJustInitialised)
+		RenderMotionBlur(cam, 175.0f * CMBlur::Drunkness);
 
 	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
@@ -475,6 +449,8 @@ CPostFX::Render(RwCamera *cam, uint32 red, uint32 green, uint32 blue, uint32 blu
 		bJustInitialised = false;
 	}else
 		bJustInitialised = true;
+
+	POP_RENDERGROUP();
 }
 
 int CPostFX::PrevRed[NUMAVERAGE], CPostFX::AvgRed;

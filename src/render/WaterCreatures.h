@@ -2,7 +2,6 @@
 
 class CObject;
 
-/*
 enum eFishSlotState {
 	WATER_CREATURE_INIT = 0,
 	WATER_CREATURE_ACTIVE,
@@ -47,4 +46,4 @@ struct WaterCreatureProperties {
 	float fLevel;
 	float fUnknown; //unused
 	float fWaterDepth;
-};*/
+};

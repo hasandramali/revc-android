@@ -1,5 +1,16 @@
 #pragma once
 
+#ifndef FINAL
+// defined in RwHelpder.cpp
+void PushRendergroup(const char *name);
+void PopRendergroup(void);
+#define PUSH_RENDERGROUP(str) PushRendergroup(str)
+#define POP_RENDERGROUP() PopRendergroup()
+#else
+#define PUSH_RENDERGROUP(str)
+#define POP_RENDERGROUP()
+#endif
+
 struct GlobalScene
 {
 	RpWorld *world;
@@ -7,7 +18,7 @@ struct GlobalScene
 };
 extern GlobalScene Scene;
 
-extern uint8 work_buff[102400];
+extern uint8 work_buff[55000];
 extern char gString[256];
 extern char gString2[512];
 extern wchar gUString[256];
@@ -23,14 +34,6 @@ extern bool gbShowTimebars;
 #ifndef FINAL
 extern bool gbPrintMemoryUsage;
 #endif
-
-// leeds
-extern bool gMakeResources;
-extern bool gUseChunkFiles;
-extern bool gSecondExportPass;
-extern bool gUseModelResources;
-extern bool gUseResources;
-extern bool gNASTY_NASTY_MEM_SHUTDOWN_HACK;
 
 class CSprite2d;
 
@@ -62,4 +65,12 @@ void SaveINIControllerSettings();
 #ifdef NEW_RENDERER
 extern bool gbNewRenderer;
 bool FredIsInFirstPersonCam(void);
+#endif
+
+#ifdef DRAW_GAME_VERSION_TEXT
+extern bool gbDrawVersionText;
+#endif
+
+#ifdef NO_MOVIES
+extern bool gbNoMovies;
 #endif

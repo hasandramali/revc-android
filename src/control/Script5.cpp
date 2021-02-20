@@ -17,20 +17,32 @@
 #include "World.h"
 #include "main.h"
 
-// LCS: file done except TODOs
-
-uint32 CRunningScript::CollectLocateParameters(uint32* pIp, bool b3D)
+void CRunningScript::UpdateCompareFlag(bool flag)
 {
-	CollectParameters(pIp, 1);
-	uint32 id = (uintptr)this + (*pIp - 16);
-	uint32 ip = *pIp;
-	uint8 type = CTheScripts::Read1ByteFromScript(&ip);
-	if (type >= ARGUMENT_LOCAL) {
-		ip--;
-		id = (uint32)(uintptr)GetPointerToScriptVariable(&ip, 0);
+	if (m_bNotFlag)
+		flag = !flag;
+	if (m_nAndOrState == ANDOR_NONE) {
+		m_bCondResult = flag;
+		return;
 	}
-	CollectParameters(pIp, b3D ? 7 : 5, &(ScriptParams[1]));
-	return id;
+	if (m_nAndOrState >= ANDS_1 && m_nAndOrState <= ANDS_8) {
+		m_bCondResult &= flag;
+		if (m_nAndOrState == ANDS_1) {
+			m_nAndOrState = ANDOR_NONE;
+			return;
+		}
+	}
+	else if (m_nAndOrState >= ORS_1 && m_nAndOrState <= ORS_8) {
+		m_bCondResult |= flag;
+		if (m_nAndOrState == ORS_1) {
+			m_nAndOrState = ANDOR_NONE;
+			return;
+		}
+	}
+	else {
+		return;
+	}
+	m_nAndOrState--;
 }
 
 void CRunningScript::LocatePlayerCommand(int32 command, uint32* pIp)
@@ -50,8 +62,8 @@ void CRunningScript::LocatePlayerCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CPlayerInfo* pPlayerInfo = &CWorld::Players[GET_INTEGER_PARAM(0)];
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CPlayerInfo* pPlayerInfo = &CWorld::Players[ScriptParams[0]];
 	switch (command) {
 	case COMMAND_LOCATE_STOPPED_PLAYER_ANY_MEANS_2D:
 	case COMMAND_LOCATE_STOPPED_PLAYER_ANY_MEANS_3D:
@@ -67,23 +79,37 @@ void CRunningScript::LocatePlayerCommand(int32 command, uint32* pIp)
 	default:
 		break;
 	}
-	X = GET_FLOAT_PARAM(1);
-	Y = GET_FLOAT_PARAM(2);
+	X = *(float*)&ScriptParams[1];
+	Y = *(float*)&ScriptParams[2];
 	if (b3D) {
-		Z = GET_FLOAT_PARAM(3);
-		dX = GET_FLOAT_PARAM(4);
-		dY = GET_FLOAT_PARAM(5);
-		dZ = GET_FLOAT_PARAM(6);
-		debug = GET_INTEGER_PARAM(7);
+		Z = *(float*)&ScriptParams[3];
+		dX = *(float*)&ScriptParams[4];
+		dY = *(float*)&ScriptParams[5];
+		dZ = *(float*)&ScriptParams[6];
+		debug = ScriptParams[7];
 	} else {
-		dX = GET_FLOAT_PARAM(3);
-		dY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dX = *(float*)&ScriptParams[3];
+		dY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
-	CVector pos = pPlayerInfo->GetPos();
 	if (!decided) {
+		CVector pos = pPlayerInfo->GetPos();
 		result = false;
-		if (Abs(pos.x - X) < dX && Abs(pos.y - Y) < dY && (!b3D || Abs(pos.z - Z) < dZ)) {
+		bool in_area;
+		if (b3D) {
+			in_area = X - dX <= pos.x &&
+				X + dX >= pos.x &&
+				Y - dY <= pos.y &&
+				Y + dY >= pos.y &&
+				Z - dZ <= pos.z &&
+				Z + dZ >= pos.z;
+		} else {
+			in_area = X - dX <= pos.x &&
+				X + dX >= pos.x &&
+				Y - dY <= pos.y &&
+				Y + dY >= pos.y;
+		}
+		if (in_area) {
 			switch (command) {
 			case COMMAND_LOCATE_PLAYER_ANY_MEANS_2D:
 			case COMMAND_LOCATE_PLAYER_ANY_MEANS_3D:
@@ -110,16 +136,14 @@ void CRunningScript::LocatePlayerCommand(int32 command, uint32* pIp)
 		}
 	}
 	UpdateCompareFlag(result);
-	if (debug && Abs(pos.x - X) < 80.0f && Abs(pos.y - Y) < 80.0f)
-		CTheScripts::HighlightImportantArea(id, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
+	if (debug)
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocatePlayerCharCommand(int32 command, uint32* pIp)
@@ -137,8 +161,8 @@ void CRunningScript::LocatePlayerCharCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CPlayerInfo* pPlayerInfo = &CWorld::Players[GET_INTEGER_PARAM(0)];
-	CPed* pTarget = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(1));
+	CPlayerInfo* pPlayerInfo = &CWorld::Players[ScriptParams[0]];
+	CPed* pTarget = CPools::GetPedPool()->GetAt(ScriptParams[1]);
 	script_assert(pTarget);
 	CVector pos = pPlayerInfo->GetPos();
 	if (pTarget->bInVehicle) {
@@ -150,14 +174,14 @@ void CRunningScript::LocatePlayerCharCommand(int32 command, uint32* pIp)
 		Y = pTarget->GetPosition().y;
 		Z = pTarget->GetPosition().z;
 	}
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = false;
 	bool in_area;
@@ -201,14 +225,12 @@ void CRunningScript::LocatePlayerCharCommand(int32 command, uint32* pIp)
 #else
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dX, b3D ? Z : MAP_Z_LOW_LIMIT);
 #endif
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocatePlayerCarCommand(int32 command, uint32* pIp)
@@ -226,21 +248,21 @@ void CRunningScript::LocatePlayerCarCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CPlayerInfo* pPlayerInfo = &CWorld::Players[GET_INTEGER_PARAM(0)];
-	CVehicle* pTarget = CPools::GetVehiclePool()->GetAt(GET_INTEGER_PARAM(1));
+	CPlayerInfo* pPlayerInfo = &CWorld::Players[ScriptParams[0]];
+	CVehicle* pTarget = CPools::GetVehiclePool()->GetAt(ScriptParams[1]);
 	script_assert(pTarget);
 	CVector pos = pPlayerInfo->GetPos();
 	X = pTarget->GetPosition().x;
 	Y = pTarget->GetPosition().y;
 	Z = pTarget->GetPosition().z;
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = false;
 	bool in_area;
@@ -280,14 +302,12 @@ void CRunningScript::LocatePlayerCarCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCharCommand(int32 command, uint32* pIp)
@@ -307,8 +327,8 @@ void CRunningScript::LocateCharCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CPed* pPed = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(0));
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CPed* pPed = CPools::GetPedPool()->GetAt(ScriptParams[0]);
 	script_assert(pPed);
 	CVector pos = pPed->InVehicle() ? pPed->m_pMyVehicle->GetPosition() : pPed->GetPosition();
 	switch (command) {
@@ -326,19 +346,19 @@ void CRunningScript::LocateCharCommand(int32 command, uint32* pIp)
 	default:
 		break;
 	}
-	X = GET_FLOAT_PARAM(1);
-	Y = GET_FLOAT_PARAM(2);
+	X = *(float*)&ScriptParams[1];
+	Y = *(float*)&ScriptParams[2];
 	if (b3D) {
-		Z = GET_FLOAT_PARAM(3);
-		dX = GET_FLOAT_PARAM(4);
-		dY = GET_FLOAT_PARAM(5);
-		dZ = GET_FLOAT_PARAM(6);
-		debug = GET_INTEGER_PARAM(7);
+		Z = *(float*)&ScriptParams[3];
+		dX = *(float*)&ScriptParams[4];
+		dY = *(float*)&ScriptParams[5];
+		dZ = *(float*)&ScriptParams[6];
+		debug = ScriptParams[7];
 	}
 	else {
-		dX = GET_FLOAT_PARAM(3);
-		dY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dX = *(float*)&ScriptParams[3];
+		dY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	if (!decided) {
 		result = false;
@@ -385,15 +405,13 @@ void CRunningScript::LocateCharCommand(int32 command, uint32* pIp)
 	}
 	UpdateCompareFlag(result);
 	if (debug)
-		CTheScripts::HighlightImportantArea(id, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCharCharCommand(int32 command, uint32* pIp)
@@ -411,9 +429,9 @@ void CRunningScript::LocateCharCharCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CPed* pPed = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(0));
+	CPed* pPed = CPools::GetPedPool()->GetAt(ScriptParams[0]);
 	script_assert(pPed);
-	CPed* pTarget = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(1));
+	CPed* pTarget = CPools::GetPedPool()->GetAt(ScriptParams[1]);
 	script_assert(pTarget);
 	CVector pos = pPed->bInVehicle ? pPed->m_pMyVehicle->GetPosition() : pPed->GetPosition();
 	if (pTarget->bInVehicle) {
@@ -426,14 +444,14 @@ void CRunningScript::LocateCharCharCommand(int32 command, uint32* pIp)
 		Y = pTarget->GetPosition().y;
 		Z = pTarget->GetPosition().z;
 	}
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = false;
 	bool in_area;
@@ -477,14 +495,12 @@ void CRunningScript::LocateCharCharCommand(int32 command, uint32* pIp)
 #else
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dX, b3D ? Z : MAP_Z_LOW_LIMIT);
 #endif
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCharCarCommand(int32 command, uint32* pIp)
@@ -502,22 +518,22 @@ void CRunningScript::LocateCharCarCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CPed* pPed = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(0));
+	CPed* pPed = CPools::GetPedPool()->GetAt(ScriptParams[0]);
 	script_assert(pPed);
-	CVehicle* pTarget = CPools::GetVehiclePool()->GetAt(GET_INTEGER_PARAM(1));
+	CVehicle* pTarget = CPools::GetVehiclePool()->GetAt(ScriptParams[1]);
 	script_assert(pTarget);
 	CVector pos = pPed->bInVehicle ? pPed->m_pMyVehicle->GetPosition() : pPed->GetPosition();
 	X = pTarget->GetPosition().x;
 	Y = pTarget->GetPosition().y;
 	Z = pTarget->GetPosition().z;
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = false;
 	bool in_area;
@@ -557,14 +573,12 @@ void CRunningScript::LocateCharCarCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCharObjectCommand(int32 command, uint32* pIp)
@@ -582,22 +596,22 @@ void CRunningScript::LocateCharObjectCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CPed* pPed = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(0));
+	CPed* pPed = CPools::GetPedPool()->GetAt(ScriptParams[0]);
 	script_assert(pPed);
-	CObject* pTarget = CPools::GetObjectPool()->GetAt(GET_INTEGER_PARAM(1));
+	CObject* pTarget = CPools::GetObjectPool()->GetAt(ScriptParams[1]);
 	script_assert(pTarget);
 	CVector pos = pPed->bInVehicle ? pPed->m_pMyVehicle->GetPosition() : pPed->GetPosition();
 	X = pTarget->GetPosition().x;
 	Y = pTarget->GetPosition().y;
 	Z = pTarget->GetPosition().z;
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = false;
 	bool in_area;
@@ -637,14 +651,12 @@ void CRunningScript::LocateCharObjectCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCarCommand(int32 command, uint32* pIp)
@@ -660,8 +672,8 @@ void CRunningScript::LocateCarCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CVehicle* pVehicle = CPools::GetVehiclePool()->GetAt(GET_INTEGER_PARAM(0));
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CVehicle* pVehicle = CPools::GetVehiclePool()->GetAt(ScriptParams[0]);
 	script_assert(pVehicle);
 	CVector pos = pVehicle->GetPosition();
 	switch (command) {
@@ -675,19 +687,19 @@ void CRunningScript::LocateCarCommand(int32 command, uint32* pIp)
 	default:
 		break;
 	}
-	X = GET_FLOAT_PARAM(1);
-	Y = GET_FLOAT_PARAM(2);
+	X = *(float*)&ScriptParams[1];
+	Y = *(float*)&ScriptParams[2];
 	if (b3D) {
-		Z = GET_FLOAT_PARAM(3);
-		dX = GET_FLOAT_PARAM(4);
-		dY = GET_FLOAT_PARAM(5);
-		dZ = GET_FLOAT_PARAM(6);
-		debug = GET_INTEGER_PARAM(7);
+		Z = *(float*)&ScriptParams[3];
+		dX = *(float*)&ScriptParams[4];
+		dY = *(float*)&ScriptParams[5];
+		dZ = *(float*)&ScriptParams[6];
+		debug = ScriptParams[7];
 	}
 	else {
-		dX = GET_FLOAT_PARAM(3);
-		dY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dX = *(float*)&ScriptParams[3];
+		dY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	if (!decided) {
 		result = false;
@@ -710,15 +722,13 @@ void CRunningScript::LocateCarCommand(int32 command, uint32* pIp)
 	}
 	UpdateCompareFlag(result);
 	if (debug)
-		CTheScripts::HighlightImportantArea(id, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateObjectCommand(int32 command, uint32* pIp)
@@ -733,23 +743,23 @@ void CRunningScript::LocateObjectCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CObject* pObject = CPools::GetObjectPool()->GetAt(GET_INTEGER_PARAM(0));
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CObject* pObject = CPools::GetObjectPool()->GetAt(ScriptParams[0]);
 	script_assert(pObject);
 	CVector pos = pObject->GetPosition();
-	X = GET_FLOAT_PARAM(1);
-	Y = GET_FLOAT_PARAM(2);
+	X = *(float*)&ScriptParams[1];
+	Y = *(float*)&ScriptParams[2];
 	if (b3D) {
-		Z = GET_FLOAT_PARAM(3);
-		dX = GET_FLOAT_PARAM(4);
-		dY = GET_FLOAT_PARAM(5);
-		dZ = GET_FLOAT_PARAM(6);
-		debug = GET_INTEGER_PARAM(7);
+		Z = *(float*)&ScriptParams[3];
+		dX = *(float*)&ScriptParams[4];
+		dY = *(float*)&ScriptParams[5];
+		dZ = *(float*)&ScriptParams[6];
+		debug = ScriptParams[7];
 	}
 	else {
-		dX = GET_FLOAT_PARAM(3);
-		dY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dX = *(float*)&ScriptParams[3];
+		dY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	result = false;
 	bool in_area;
@@ -770,15 +780,13 @@ void CRunningScript::LocateObjectCommand(int32 command, uint32* pIp)
 	result = in_area;
 	UpdateCompareFlag(result);
 	if (debug)
-		CTheScripts::HighlightImportantArea(id, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateSniperBulletCommand(int32 command, uint32* pIp)
@@ -794,32 +802,30 @@ void CRunningScript::LocateSniperBulletCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 7 : 5);
-	X = GET_FLOAT_PARAM(0);
-	Y = GET_FLOAT_PARAM(1);
+	X = *(float*)&ScriptParams[0];
+	Y = *(float*)&ScriptParams[1];
 	if (b3D) {
-		Z = GET_FLOAT_PARAM(2);
-		dX = GET_FLOAT_PARAM(3);
-		dY = GET_FLOAT_PARAM(4);
-		dZ = GET_FLOAT_PARAM(5);
-		debug = GET_INTEGER_PARAM(6);
+		Z = *(float*)&ScriptParams[2];
+		dX = *(float*)&ScriptParams[3];
+		dY = *(float*)&ScriptParams[4];
+		dZ = *(float*)&ScriptParams[5];
+		debug = ScriptParams[6];
 	}
 	else {
-		dX = GET_FLOAT_PARAM(2);
-		dY = GET_FLOAT_PARAM(3);
-		debug = GET_INTEGER_PARAM(4);
+		dX = *(float*)&ScriptParams[2];
+		dY = *(float*)&ScriptParams[3];
+		debug = ScriptParams[4];
 	}
 	result = CBulletInfo::TestForSniperBullet(X - dX, X + dX, Y - dY, Y + dY, b3D ? Z - dZ : -1000.0f, b3D ? Z + dZ : 1000.0f);
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::PlayerInAreaCheckCommand(int32 command, uint32* pIp)
@@ -839,8 +845,8 @@ void CRunningScript::PlayerInAreaCheckCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CPlayerInfo* pPlayerInfo = &CWorld::Players[GET_INTEGER_PARAM(0)];
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CPlayerInfo* pPlayerInfo = &CWorld::Players[ScriptParams[0]];
 	switch (command) {
 	case COMMAND_IS_PLAYER_STOPPED_IN_AREA_3D:
 	case COMMAND_IS_PLAYER_STOPPED_IN_AREA_ON_FOOT_3D:
@@ -856,23 +862,23 @@ void CRunningScript::PlayerInAreaCheckCommand(int32 command, uint32* pIp)
 	default:
 		break;
 	}
-	infX = GET_FLOAT_PARAM(1);
-	infY = GET_FLOAT_PARAM(2);
+	infX = *(float*)&ScriptParams[1];
+	infY = *(float*)&ScriptParams[2];
 	if (b3D) {
-		infZ = GET_FLOAT_PARAM(3);
-		supX = GET_FLOAT_PARAM(4);
-		supY = GET_FLOAT_PARAM(5);
-		supZ = GET_FLOAT_PARAM(6);
+		infZ = *(float*)&ScriptParams[3];
+		supX = *(float*)&ScriptParams[4];
+		supY = *(float*)&ScriptParams[5];
+		supZ = *(float*)&ScriptParams[6];
 		if (infZ > supZ) {
-			infZ = GET_FLOAT_PARAM(6);
-			supZ = GET_FLOAT_PARAM(3);
+			infZ = *(float*)&ScriptParams[6];
+			supZ = *(float*)&ScriptParams[3];
 		}
-		debug = GET_INTEGER_PARAM(7);
+		debug = ScriptParams[7];
 	}
 	else {
-		supX = GET_FLOAT_PARAM(3);
-		supY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		supX = *(float*)&ScriptParams[3];
+		supY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	if (infX > supX) {
 		float tmp = infX;
@@ -931,14 +937,12 @@ void CRunningScript::PlayerInAreaCheckCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(infX, infY, infZ, supX, supY, supZ);
 		else
 			CTheScripts::DrawDebugSquare(infX, infY, supX, supY);
 	}
-	*/
 }
 
 void CRunningScript::PlayerInAngledAreaCheckCommand(int32 command, uint32* pIp)
@@ -959,7 +963,7 @@ void CRunningScript::PlayerInAngledAreaCheckCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 9 : 7);
-	CPlayerInfo* pPlayerInfo = &CWorld::Players[GET_INTEGER_PARAM(0)];
+	CPlayerInfo* pPlayerInfo = &CWorld::Players[ScriptParams[0]];
 	switch (command) {
 	case COMMAND_IS_PLAYER_STOPPED_IN_ANGLED_AREA_3D:
 	case COMMAND_IS_PLAYER_STOPPED_IN_ANGLED_AREA_ON_FOOT_3D:
@@ -975,25 +979,25 @@ void CRunningScript::PlayerInAngledAreaCheckCommand(int32 command, uint32* pIp)
 	default:
 		break;
 	}
-	infX = GET_FLOAT_PARAM(1);
-	infY = GET_FLOAT_PARAM(2);
+	infX = *(float*)&ScriptParams[1];
+	infY = *(float*)&ScriptParams[2];
 	if (b3D) {
-		infZ = GET_FLOAT_PARAM(3);
-		supX = GET_FLOAT_PARAM(4);
-		supY = GET_FLOAT_PARAM(5);
-		supZ = GET_FLOAT_PARAM(6);
+		infZ = *(float*)&ScriptParams[3];
+		supX = *(float*)&ScriptParams[4];
+		supY = *(float*)&ScriptParams[5];
+		supZ = *(float*)&ScriptParams[6];
 		if (infZ > supZ) {
-			infZ = GET_FLOAT_PARAM(6);
-			supZ = GET_FLOAT_PARAM(3);
+			infZ = *(float*)&ScriptParams[6];
+			supZ = *(float*)&ScriptParams[3];
 		}
-		side2length = GET_FLOAT_PARAM(7);
-		debug = GET_INTEGER_PARAM(8);
+		side2length = *(float*)&ScriptParams[7];
+		debug = ScriptParams[8];
 	}
 	else {
-		supX = GET_FLOAT_PARAM(3);
-		supY = GET_FLOAT_PARAM(4);
-		side2length = GET_FLOAT_PARAM(5);
-		debug = GET_INTEGER_PARAM(6);
+		supX = *(float*)&ScriptParams[3];
+		supY = *(float*)&ScriptParams[4];
+		side2length = *(float*)&ScriptParams[5];
+		debug = ScriptParams[6];
 	}
 	float initAngle = CGeneral::GetRadianAngleBetweenPoints(infX, infY, supX, supY) + HALFPI;
 	while (initAngle < 0.0f)
@@ -1056,7 +1060,6 @@ void CRunningScript::PlayerInAngledAreaCheckCommand(int32 command, uint32* pIp)
 	if (debug)
 		CTheScripts::HighlightImportantAngledArea((uintptr)this + m_nIp, infX, infY, supX, supY,
 			rotatedSupX, rotatedSupY, rotatedInfX, rotatedInfY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugAngledCube(infX, infY, infZ, supX, supY, supZ,
@@ -1065,7 +1068,6 @@ void CRunningScript::PlayerInAngledAreaCheckCommand(int32 command, uint32* pIp)
 			CTheScripts::DrawDebugAngledSquare(infX, infY, supX, supY,
 				rotatedSupX, rotatedSupY, rotatedInfX, rotatedInfY);
 	}
-	*/
 }
 
 void CRunningScript::CharInAreaCheckCommand(int32 command, uint32* pIp)
@@ -1085,8 +1087,8 @@ void CRunningScript::CharInAreaCheckCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CPed* pPed = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(0));
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CPed* pPed = CPools::GetPedPool()->GetAt(ScriptParams[0]);
 	script_assert(pPed);
 	CVector pos = pPed->InVehicle() ? pPed->m_pMyVehicle->GetPosition() : pPed->GetPosition();
 	switch (command) {
@@ -1104,23 +1106,23 @@ void CRunningScript::CharInAreaCheckCommand(int32 command, uint32* pIp)
 	default:
 		break;
 	}
-	infX = GET_FLOAT_PARAM(1);
-	infY = GET_FLOAT_PARAM(2);
+	infX = *(float*)&ScriptParams[1];
+	infY = *(float*)&ScriptParams[2];
 	if (b3D) {
-		infZ = GET_FLOAT_PARAM(3);
-		supX = GET_FLOAT_PARAM(4);
-		supY = GET_FLOAT_PARAM(5);
-		supZ = GET_FLOAT_PARAM(6);
+		infZ = *(float*)&ScriptParams[3];
+		supX = *(float*)&ScriptParams[4];
+		supY = *(float*)&ScriptParams[5];
+		supZ = *(float*)&ScriptParams[6];
 		if (infZ > supZ) {
-			infZ = GET_FLOAT_PARAM(6);
-			supZ = GET_FLOAT_PARAM(3);
+			infZ = *(float*)&ScriptParams[6];
+			supZ = *(float*)&ScriptParams[3];
 		}
-		debug = GET_INTEGER_PARAM(7);
+		debug = ScriptParams[7];
 	}
 	else {
-		supX = GET_FLOAT_PARAM(3);
-		supY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		supX = *(float*)&ScriptParams[3];
+		supY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	if (infX > supX) {
 		float tmp = infX;
@@ -1177,15 +1179,13 @@ void CRunningScript::CharInAreaCheckCommand(int32 command, uint32* pIp)
 	}
 	UpdateCompareFlag(result);
 	if (debug)
-		CTheScripts::HighlightImportantArea(id, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
-	/*
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(infX, infY, infZ, supX, supY, supZ);
 		else
 			CTheScripts::DrawDebugSquare(infX, infY, supX, supY);
 	}
-	*/
 }
 
 void CRunningScript::CarInAreaCheckCommand(int32 command, uint32* pIp)
@@ -1201,8 +1201,8 @@ void CRunningScript::CarInAreaCheckCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CVehicle* pVehicle = CPools::GetVehiclePool()->GetAt(GET_INTEGER_PARAM(0));
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CVehicle* pVehicle = CPools::GetVehiclePool()->GetAt(ScriptParams[0]);
 	script_assert(pVehicle);
 	CVector pos = pVehicle->GetPosition();
 	switch (command) {
@@ -1216,23 +1216,23 @@ void CRunningScript::CarInAreaCheckCommand(int32 command, uint32* pIp)
 	default:
 		break;
 	}
-	infX = GET_FLOAT_PARAM(1);
-	infY = GET_FLOAT_PARAM(2);
+	infX = *(float*)&ScriptParams[1];
+	infY = *(float*)&ScriptParams[2];
 	if (b3D) {
-		infZ = GET_FLOAT_PARAM(3);
-		supX = GET_FLOAT_PARAM(4);
-		supY = GET_FLOAT_PARAM(5);
-		supZ = GET_FLOAT_PARAM(6);
+		infZ = *(float*)&ScriptParams[3];
+		supX = *(float*)&ScriptParams[4];
+		supY = *(float*)&ScriptParams[5];
+		supZ = *(float*)&ScriptParams[6];
 		if (infZ > supZ) {
-			infZ = GET_FLOAT_PARAM(6);
-			supZ = GET_FLOAT_PARAM(3);
+			infZ = *(float*)&ScriptParams[6];
+			supZ = *(float*)&ScriptParams[3];
 		}
-		debug = GET_INTEGER_PARAM(7);
+		debug = ScriptParams[7];
 	}
 	else {
-		supX = GET_FLOAT_PARAM(3);
-		supY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		supX = *(float*)&ScriptParams[3];
+		supY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	if (infX > supX) {
 		float tmp = infX;
@@ -1277,15 +1277,13 @@ void CRunningScript::CarInAreaCheckCommand(int32 command, uint32* pIp)
 	}
 	UpdateCompareFlag(result);
 	if (debug)
-		CTheScripts::HighlightImportantArea(id, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
-	/*
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(infX, infY, infZ, supX, supY, supZ);
 		else
 			CTheScripts::DrawDebugSquare(infX, infY, supX, supY);
 	}
-	*/
 }
 
 void CRunningScript::ObjectInAreaCheckCommand(int32 command, uint32* pIp)
@@ -1300,27 +1298,27 @@ void CRunningScript::ObjectInAreaCheckCommand(int32 command, uint32* pIp)
 		b3D = false;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	CObject* pObject = CPools::GetObjectPool()->GetAt(GET_INTEGER_PARAM(0));
+	CollectParameters(pIp, b3D ? 8 : 6);
+	CObject* pObject = CPools::GetObjectPool()->GetAt(ScriptParams[0]);
 	script_assert(pObject);
 	CVector pos = pObject->GetPosition();
-	infX = GET_FLOAT_PARAM(1);
-	infY = GET_FLOAT_PARAM(2);
+	infX = *(float*)&ScriptParams[1];
+	infY = *(float*)&ScriptParams[2];
 	if (b3D) {
-		infZ = GET_FLOAT_PARAM(3);
-		supX = GET_FLOAT_PARAM(4);
-		supY = GET_FLOAT_PARAM(5);
-		supZ = GET_FLOAT_PARAM(6);
+		infZ = *(float*)&ScriptParams[3];
+		supX = *(float*)&ScriptParams[4];
+		supY = *(float*)&ScriptParams[5];
+		supZ = *(float*)&ScriptParams[6];
 		if (infZ > supZ) {
-			infZ = GET_FLOAT_PARAM(6);
-			supZ = GET_FLOAT_PARAM(3);
+			infZ = *(float*)&ScriptParams[6];
+			supZ = *(float*)&ScriptParams[3];
 		}
-		debug = GET_INTEGER_PARAM(7);
+		debug = ScriptParams[7];
 	}
 	else {
-		supX = GET_FLOAT_PARAM(3);
-		supY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		supX = *(float*)&ScriptParams[3];
+		supY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	if (infX > supX) {
 		float tmp = infX;
@@ -1361,15 +1359,13 @@ void CRunningScript::ObjectInAreaCheckCommand(int32 command, uint32* pIp)
 	}
 	UpdateCompareFlag(result);
 	if (debug)
-		CTheScripts::HighlightImportantArea(id, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
-	/*
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(infX, infY, infZ, supX, supY, supZ);
 		else
 			CTheScripts::DrawDebugSquare(infX, infY, supX, supY);
 	}
-	*/
 }
 
 void CRunningScript::DoDeatharrestCheck()
@@ -1390,8 +1386,7 @@ void CRunningScript::DoDeatharrestCheck()
 	script_assert(m_nStackPointer > 0);
 	while (m_nStackPointer > 1)
 		--m_nStackPointer;
-	ReturnFromGosubOrFunction();
-	m_nLocalsPointer = 0;
+	m_nIp = m_anStack[--m_nStackPointer];
 	CMessages::ClearSmallMessagesOnly();
 	*(int32*)&CTheScripts::ScriptSpace[CTheScripts::OnAMissionFlag] = 0;
 	m_bDeatharrestExecuted = true;
@@ -1445,24 +1440,24 @@ void CRunningScript::LocateCollectiveCommand(int32 command, uint32* pIp)
 		b3D = true;
 		break;
 	}
-	uint32 id = CollectLocateParameters(pIp, b3D);
-	X = GET_FLOAT_PARAM(1);
-	Y = GET_FLOAT_PARAM(2);
+	CollectParameters(pIp, b3D ? 8 : 6);
+	X = *(float*)&ScriptParams[1];
+	Y = *(float*)&ScriptParams[2];
 	if (b3D) {
-		Z = GET_FLOAT_PARAM(3);
-		dX = GET_FLOAT_PARAM(4);
-		dY = GET_FLOAT_PARAM(5);
-		dZ = GET_FLOAT_PARAM(6);
-		debug = GET_INTEGER_PARAM(7);
+		Z = *(float*)&ScriptParams[3];
+		dX = *(float*)&ScriptParams[4];
+		dY = *(float*)&ScriptParams[5];
+		dZ = *(float*)&ScriptParams[6];
+		debug = ScriptParams[7];
 	}
 	else {
-		dX = GET_FLOAT_PARAM(3);
-		dY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dX = *(float*)&ScriptParams[3];
+		dY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	result = true;
 	for (int i = 0; i < MAX_NUM_COLLECTIVES && result; i++) {
-		if (GET_INTEGER_PARAM(0) != CTheScripts::CollectiveArray[i].colIndex)
+		if (ScriptParams[0] != CTheScripts::CollectiveArray[i].colIndex)
 			continue;
 		CPed* pPed = CPools::GetPedPool()->GetAt(CTheScripts::CollectiveArray[i].pedIndex);
 		if (!pPed) {
@@ -1523,15 +1518,13 @@ void CRunningScript::LocateCollectiveCommand(int32 command, uint32* pIp)
 	}
 	UpdateCompareFlag(result);
 	if (debug)
-		CTheScripts::HighlightImportantArea(id, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
+		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCollectiveCharCommand(int32 command, uint32* pIp)
@@ -1549,7 +1542,7 @@ void CRunningScript::LocateCollectiveCharCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CPed* pTarget = CPools::GetPedPool()->GetAt(GET_INTEGER_PARAM(1));
+	CPed* pTarget = CPools::GetPedPool()->GetAt(ScriptParams[1]);
 	script_assert(pTarget);
 	if (pTarget->bInVehicle) {
 		X = pTarget->m_pMyVehicle->GetPosition().x;
@@ -1561,18 +1554,18 @@ void CRunningScript::LocateCollectiveCharCommand(int32 command, uint32* pIp)
 		Y = pTarget->GetPosition().y;
 		Z = pTarget->GetPosition().z;
 	}
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = true;
 	for (int i = 0; i < MAX_NUM_COLLECTIVES && result; i++) {
-		if (GET_INTEGER_PARAM(0) != CTheScripts::CollectiveArray[i].colIndex)
+		if (ScriptParams[0] != CTheScripts::CollectiveArray[i].colIndex)
 			continue;
 		CPed* pPed = CPools::GetPedPool()->GetAt(CTheScripts::CollectiveArray[i].pedIndex);
 		if (!pPed) {
@@ -1617,14 +1610,12 @@ void CRunningScript::LocateCollectiveCharCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCollectiveCarCommand(int32 command, uint32* pIp)
@@ -1642,23 +1633,23 @@ void CRunningScript::LocateCollectiveCarCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CVehicle* pTarget = CPools::GetVehiclePool()->GetAt(GET_INTEGER_PARAM(1));
+	CVehicle* pTarget = CPools::GetVehiclePool()->GetAt(ScriptParams[1]);
 	script_assert(pTarget);
 	X = pTarget->GetPosition().x;
 	Y = pTarget->GetPosition().y;
 	Z = pTarget->GetPosition().z;
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = true;
 	for (int i = 0; i < MAX_NUM_COLLECTIVES && result; i++) {
-		if (GET_INTEGER_PARAM(0) != CTheScripts::CollectiveArray[i].colIndex)
+		if (ScriptParams[0] != CTheScripts::CollectiveArray[i].colIndex)
 			continue;
 		CPed* pPed = CPools::GetPedPool()->GetAt(CTheScripts::CollectiveArray[i].pedIndex);
 		if (!pPed) {
@@ -1703,14 +1694,12 @@ void CRunningScript::LocateCollectiveCarCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::LocateCollectivePlayerCommand(int32 command, uint32* pIp)
@@ -1728,22 +1717,22 @@ void CRunningScript::LocateCollectivePlayerCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 6 : 5);
-	CVector pos = CWorld::Players[GET_INTEGER_PARAM(1)].GetPos();
+	CVector pos = CWorld::Players[ScriptParams[1]].GetPos();
 	X = pos.x;
 	Y = pos.y;
 	Z = pos.z;
-	dX = GET_FLOAT_PARAM(2);
-	dY = GET_FLOAT_PARAM(3);
+	dX = *(float*)&ScriptParams[2];
+	dY = *(float*)&ScriptParams[3];
 	if (b3D) {
-		dZ = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		dZ = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	else {
-		debug = GET_INTEGER_PARAM(4);
+		debug = ScriptParams[4];
 	}
 	result = true;
 	for (int i = 0; i < MAX_NUM_COLLECTIVES && result; i++) {
-		if (GET_INTEGER_PARAM(0) != CTheScripts::CollectiveArray[i].colIndex)
+		if (ScriptParams[0] != CTheScripts::CollectiveArray[i].colIndex)
 			continue;
 		CPed* pPed = CPools::GetPedPool()->GetAt(CTheScripts::CollectiveArray[i].pedIndex);
 		if (!pPed) {
@@ -1788,14 +1777,12 @@ void CRunningScript::LocateCollectivePlayerCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, X - dX, Y - dY, X + dX, Y + dY, b3D ? Z : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(X - dX, Y - dY, Z - dZ, X + dX, Y + dY, Z + dZ);
 		else
 			CTheScripts::DrawDebugSquare(X - dX, Y - dY, X + dX, Y + dY);
 	}
-	*/
 }
 
 void CRunningScript::CollectiveInAreaCheckCommand(int32 command, uint32* pIp)
@@ -1816,23 +1803,23 @@ void CRunningScript::CollectiveInAreaCheckCommand(int32 command, uint32* pIp)
 		break;
 	}
 	CollectParameters(pIp, b3D ? 8 : 6);
-	infX = GET_FLOAT_PARAM(1);
-	infY = GET_FLOAT_PARAM(2);
+	infX = *(float*)&ScriptParams[1];
+	infY = *(float*)&ScriptParams[2];
 	if (b3D) {
-		infZ = GET_FLOAT_PARAM(3);
-		supX = GET_FLOAT_PARAM(4);
-		supY = GET_FLOAT_PARAM(5);
-		supZ = GET_FLOAT_PARAM(6);
+		infZ = *(float*)&ScriptParams[3];
+		supX = *(float*)&ScriptParams[4];
+		supY = *(float*)&ScriptParams[5];
+		supZ = *(float*)&ScriptParams[6];
 		if (infZ > supZ) {
-			infZ = GET_FLOAT_PARAM(6);
-			supZ = GET_FLOAT_PARAM(3);
+			infZ = *(float*)&ScriptParams[6];
+			supZ = *(float*)&ScriptParams[3];
 		}
-		debug = GET_INTEGER_PARAM(7);
+		debug = ScriptParams[7];
 	}
 	else {
-		supX = GET_FLOAT_PARAM(3);
-		supY = GET_FLOAT_PARAM(4);
-		debug = GET_INTEGER_PARAM(5);
+		supX = *(float*)&ScriptParams[3];
+		supY = *(float*)&ScriptParams[4];
+		debug = ScriptParams[5];
 	}
 	if (infX > supX) {
 		float tmp = infX;
@@ -1846,7 +1833,7 @@ void CRunningScript::CollectiveInAreaCheckCommand(int32 command, uint32* pIp)
 	}
 	result = true;
 	for (int i = 0; i < MAX_NUM_COLLECTIVES && result; i++) {
-		if (GET_INTEGER_PARAM(0) != CTheScripts::CollectiveArray[i].colIndex)
+		if (ScriptParams[0] != CTheScripts::CollectiveArray[i].colIndex)
 			continue;
 		CPed* pPed = CPools::GetPedPool()->GetAt(CTheScripts::CollectiveArray[i].pedIndex);
 		if (!pPed) {
@@ -1908,14 +1895,12 @@ void CRunningScript::CollectiveInAreaCheckCommand(int32 command, uint32* pIp)
 	UpdateCompareFlag(result);
 	if (debug)
 		CTheScripts::HighlightImportantArea((uintptr)this + m_nIp, infX, infY, supX, supY, b3D ? (infZ + supZ) / 2 : MAP_Z_LOW_LIMIT);
-	/*
 	if (CTheScripts::DbgFlag) {
 		if (b3D)
 			CTheScripts::DrawDebugCube(infX, infY, infZ, supX, supY, supZ);
 		else
 			CTheScripts::DrawDebugSquare(infX, infY, supX, supY);
 	}
-	*/
 }
 #endif
 
@@ -2002,9 +1987,8 @@ void CTheScripts::PrintListSizes()
 	debug("active: %d, idle: %d", active, idle);
 }
 
-//uint32 DbgLineColour = 0x0000FFFF; // r = 0, g = 0, b = 255, a = 255
+uint32 DbgLineColour = 0x0000FFFF; // r = 0, g = 0, b = 255, a = 255
 
-/*
 void CTheScripts::DrawDebugSquare(float infX, float infY, float supX, float supY)
 {
 	CColPoint tmpCP;
@@ -2111,7 +2095,6 @@ void CTheScripts::RenderTheScriptDebugLines()
 	NumScriptDebugLines = 0;
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)0);
 }
-*/
 
 #define SCRIPT_DATA_SIZE sizeof(CTheScripts::OnAMissionFlag) +\
 	4 * sizeof(uint32) * MAX_NUM_BUILDING_SWAPS + 2 * sizeof(uint32) * MAX_NUM_INVISIBILITY_SETTINGS + 5 * sizeof(uint32)
@@ -2135,9 +2118,6 @@ INITSAVEBUF
 	WriteSaveBuf(buf, script_data_size);
 	WriteSaveBuf(buf, OnAMissionFlag);
 	WriteSaveBuf(buf, LastMissionPassedTime);
-	for (uint32 i = 0; i < MAX_NUM_COLLECTIVES; i++)
-		WriteSaveBuf(buf, CollectiveArray[i]);
-	WriteSaveBuf(buf, NextFreeCollectiveIndex);
 	for (uint32 i = 0; i < MAX_NUM_BUILDING_SWAPS; i++) {
 		CBuilding* pBuilding = BuildingSwapArray[i].m_pBuilding;
 		uint32 type, handle;
@@ -2199,36 +2179,20 @@ INITSAVEBUF
 VALIDATESAVEBUF(*size)
 }
 
-// TODO: I don't really understand how script loading works, so I leave it the VC way for now.
-bool CTheScripts::LoadAllScripts(uint8* buf, uint32 size)
+void CTheScripts::LoadAllScripts(uint8* buf, uint32 size)
 {
-	Init(); // TODO: in LCS CTheScripts::Init call GenericLoad, which then calls LoadAllScripts
+	Init();
 INITSAVEBUF
 	CheckSaveHeader(buf, 'S', 'C', 'R', '\0', size - SAVE_HEADER_SIZE);
 	uint32 varSpace = ReadSaveBuf<uint32>(buf);
-	if (*(int32*)&ScriptSpace[0] != *(int32*)&buf[0] || *(int32*)&ScriptSpace[4] != *(int32*)&buf[4]) {
-		printf("\n===================================================\nSave Game Mismatch!!!\n");
-		return false;
-	}
-	for (uint32 i = 0; i < varSpace; i++) { // this is not exactly what function does
-		if (i < 8)
-			ScriptSpace[i] = ReadSaveBuf<uint8>(buf);
-		else if (GetSaveVarIndex(i / 4 * 4) != -1)
-			ScriptSpace[i] = ReadSaveBuf<uint8>(buf);
-		else
-			ReadSaveBuf<uint8>(buf);
-	}
-	// everything else is... gone? TODO
+	for (uint32 i = 0; i < varSpace; i++)
+		ScriptSpace[i] = ReadSaveBuf<uint8>(buf);
 	script_assert(ReadSaveBuf<uint32>(buf) == SCRIPT_DATA_SIZE);
 	OnAMissionFlag = ReadSaveBuf<uint32>(buf);
 	LastMissionPassedTime = ReadSaveBuf<uint32>(buf);
-	for (uint32 i = 0; i < MAX_NUM_COLLECTIVES; i++)
-		CollectiveArray[i] = ReadSaveBuf<tCollectiveData>(buf);
-	NextFreeCollectiveIndex = ReadSaveBuf<int32>(buf);
 	for (uint32 i = 0; i < MAX_NUM_BUILDING_SWAPS; i++) {
 		uint32 type = ReadSaveBuf<uint32>(buf);
 		uint32 handle = ReadSaveBuf<uint32>(buf);
-		/*
 		switch (type) {
 		case 0:
 			BuildingSwapArray[i].m_pBuilding = nil;
@@ -2242,18 +2206,14 @@ INITSAVEBUF
 		default:
 			script_assert(false);
 		}
-		*/
-		/*BuildingSwapArray[i].m_nNewModel = */ReadSaveBuf<uint32>(buf);
-		/*BuildingSwapArray[i].m_nOldModel = */ReadSaveBuf<uint32>(buf);
-		/*
+		BuildingSwapArray[i].m_nNewModel = ReadSaveBuf<uint32>(buf);
+		BuildingSwapArray[i].m_nOldModel = ReadSaveBuf<uint32>(buf);
 		if (BuildingSwapArray[i].m_pBuilding)
 			BuildingSwapArray[i].m_pBuilding->ReplaceWithNewModel(BuildingSwapArray[i].m_nNewModel);
-		*/
 	}
 	for (uint32 i = 0; i < MAX_NUM_INVISIBILITY_SETTINGS; i++) {
 		uint32 type = ReadSaveBuf<uint32>(buf);
 		uint32 handle = ReadSaveBuf<uint32>(buf);
-		/*
 		switch (type) {
 		case 0:
 			InvisibilitySettingArray[i] = nil;
@@ -2275,10 +2235,9 @@ INITSAVEBUF
 		}
 		if (InvisibilitySettingArray[i])
 			InvisibilitySettingArray[i]->bIsVisible = false;
-		*/
 	}
 	script_assert(ReadSaveBuf<bool>(buf) == bUsingAMultiScriptFile);
-	/*bPlayerHasMetDebbieHarry = */ReadSaveBuf<uint8>(buf);
+	bPlayerHasMetDebbieHarry = ReadSaveBuf<uint8>(buf);
 	ReadSaveBuf<uint16>(buf);
 	script_assert(ReadSaveBuf<uint32>(buf) == MainScriptSize);
 	script_assert(ReadSaveBuf<uint32>(buf) == LargestMissionScriptSize);
@@ -2286,9 +2245,7 @@ INITSAVEBUF
 	script_assert(ReadSaveBuf<uint16>(buf) == NumberOfExclusiveMissionScripts);
 	uint32 runningScripts = ReadSaveBuf<uint32>(buf);
 	for (uint32 i = 0; i < runningScripts; i++)
-		CRunningScript().Load(buf);
-	StartTestScript(); // <- tmp hack
-	return true;
+		StartNewScript(0)->Load(buf);
 VALIDATESAVEBUF(size)
 }
 
@@ -2298,7 +2255,6 @@ void CRunningScript::Save(uint8*& buf)
 {
 #ifdef COMPATIBLE_SAVES
 	SkipSaveBuf(buf, 8);
-	WriteSaveBuf<int32>(buf, m_nId);
 	for (int i = 0; i < 8; i++)
 		WriteSaveBuf<char>(buf, m_abScriptName[i]);
 	WriteSaveBuf<uint32>(buf, m_nIp);
@@ -2310,11 +2266,10 @@ void CRunningScript::Save(uint8*& buf)
 	WriteSaveBuf<uint16>(buf, m_nStackPointer);
 	SkipSaveBuf(buf, 2);
 #ifdef CHECK_STRUCT_SIZES
-	static_assert(NUM_LOCAL_VARS + 8 + NUM_TIMERS == 106, "Compatibility loss: NUM_LOCAL_VARS + NUM_TIMERS != 106");
+	static_assert(NUM_LOCAL_VARS + NUM_TIMERS == 18, "Compatibility loss: NUM_LOCAL_VARS + NUM_TIMERS != 18");
 #endif
-	for (int i = 0; i < NUM_LOCAL_VARS + 8 + NUM_TIMERS; i++)
+	for (int i = 0; i < NUM_LOCAL_VARS + NUM_TIMERS; i++)
 		WriteSaveBuf<int32>(buf, m_anLocalVariables[i]);
-	WriteSaveBuf<int32>(buf, m_nLocalsPointer);
 	WriteSaveBuf<bool>(buf, m_bIsActive);
 	WriteSaveBuf<bool>(buf, m_bCondResult);
 	WriteSaveBuf<bool>(buf, m_bIsMissionScript);
@@ -2335,7 +2290,6 @@ void CRunningScript::Load(uint8*& buf)
 {
 #ifdef COMPATIBLE_SAVES
 	SkipSaveBuf(buf, 8);
-	m_nId = ReadSaveBuf<int32>(buf);
 	for (int i = 0; i < 8; i++)
 		m_abScriptName[i] = ReadSaveBuf<char>(buf);
 	m_nIp = ReadSaveBuf<uint32>(buf);
@@ -2347,11 +2301,10 @@ void CRunningScript::Load(uint8*& buf)
 	m_nStackPointer = ReadSaveBuf<uint16>(buf);
 	SkipSaveBuf(buf, 2);
 #ifdef CHECK_STRUCT_SIZES
-	static_assert(NUM_LOCAL_VARS + 8 + NUM_TIMERS == 106, "Compatibility loss: NUM_LOCAL_VARS + 8 + NUM_TIMERS != 106");
+	static_assert(NUM_LOCAL_VARS + NUM_TIMERS == 18, "Compatibility loss: NUM_LOCAL_VARS + NUM_TIMERS != 18");
 #endif
-	for (int i = 0; i < NUM_LOCAL_VARS + 8 + NUM_TIMERS; i++)
+	for (int i = 0; i < NUM_LOCAL_VARS + NUM_TIMERS; i++)
 		m_anLocalVariables[i] = ReadSaveBuf<int32>(buf);
-	m_nLocalsPointer = ReadSaveBuf<int32>(buf);
 	m_bIsActive = ReadSaveBuf<bool>(buf);
 	m_bCondResult = ReadSaveBuf<bool>(buf);
 	m_bIsMissionScript = ReadSaveBuf<bool>(buf);
@@ -2730,14 +2683,8 @@ void CTheScripts::CleanUpThisPed(CPed* pPed)
 		}
 		else {
 			if (pPed->m_pMyVehicle->m_vehType == VEHICLE_TYPE_CAR) {
-				if ((pPed->m_fHealth < 1.0f && !pPed->IsPedHeadAbovePos(-0.3f)) || pPed->bBodyPartJustCameOff) {
-					pPed->SetObjective(OBJECTIVE_LEAVE_CAR_AND_DIE, pPed->m_pMyVehicle);
-					pPed->bWanderPathAfterExitingCar = false;
-				}
-				else {
-					pPed->SetObjective(OBJECTIVE_LEAVE_CAR, pPed->m_pMyVehicle);
-					pPed->bWanderPathAfterExitingCar = true;
-				}
+				pPed->SetObjective(OBJECTIVE_LEAVE_CAR, pPed->m_pMyVehicle);
+				pPed->bWanderPathAfterExitingCar = true;
 			}
 		}
 	}
@@ -2750,7 +2697,6 @@ void CTheScripts::CleanUpThisPed(CPed* pPed)
 		flees = true;
 	}
 	pPed->ClearObjective();
-	pPed->SetWaitState(WAITSTATE_FALSE, nil); // third parameter is 0 TODO?
 	pPed->bRespondsToThreats = true;
 	pPed->bScriptObjectiveCompleted = false;
 	pPed->bKindaStayInSamePlace = false;
@@ -2794,9 +2740,6 @@ void CTheScripts::ReadObjectNamesFromScript()
 {
 	int32 varSpace = GetSizeOfVariableSpace();
 	uint32 ip = varSpace + 8;
-	NumSaveVars = Read4BytesFromScript(&ip);
-	SavedVarIndices = (short*)&ScriptSpace[ip];
-	ip += 2 * NumSaveVars;
 	NumberOfUsedObjects = Read2BytesFromScript(&ip);
 	ip += 2;
 	for (uint16 i = 0; i < NumberOfUsedObjects; i++) {
@@ -2808,16 +2751,30 @@ void CTheScripts::ReadObjectNamesFromScript()
 
 void CTheScripts::UpdateObjectIndices()
 {
+	char name[USED_OBJECT_NAME_LENGTH];
 	char error[112];
 	for (int i = 1; i < NumberOfUsedObjects; i++) {
-		UsedObjectArray[i].index = -1;
-		CModelInfo::GetModelInfo(UsedObjectArray[i].name, &UsedObjectArray[i].index);
-#ifndef FINAL
-		if (UsedObjectArray[i].index == -1) {
+		bool found = false;
+		for (int j = 0; j < MODELINFOSIZE && !found; j++) {
+			CBaseModelInfo* pModel = CModelInfo::GetModelInfo(j);
+			if (!pModel)
+				continue;
+			strcpy(name, pModel->GetModelName());
+#ifdef FIX_BUGS
+			for (int k = 0; k < USED_OBJECT_NAME_LENGTH && name[k]; k++)
+#else
+			for (int k = 0; k < USED_OBJECT_NAME_LENGTH; k++)
+#endif
+				name[k] = toupper(name[k]);
+			if (strcmp(name, UsedObjectArray[i].name) == 0) {
+				found = true;
+				UsedObjectArray[i].index = j;
+			}
+		}
+		if (!found) {
 			sprintf(error, "CTheScripts::UpdateObjectIndices - Couldn't find %s", UsedObjectArray[i].name);
 			debug("%s\n", error);
 		}
-#endif
 	}
 }
 
@@ -2827,8 +2784,7 @@ void CTheScripts::ReadMultiScriptFileOffsetsFromScript()
 	uint32 ip = varSpace + 3;
 	int32 objectSize = Read4BytesFromScript(&ip);
 	ip = objectSize + 8;
-	NumTrueGlobals = Read2BytesFromScript(&ip);
-	MostGlobals = Read2BytesFromScript(&ip);
+	MainScriptSize = Read4BytesFromScript(&ip);
 	LargestMissionScriptSize = Read4BytesFromScript(&ip);
 	NumberOfMissionScripts = Read2BytesFromScript(&ip);
 	NumberOfExclusiveMissionScripts = Read2BytesFromScript(&ip);

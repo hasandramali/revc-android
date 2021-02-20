@@ -8,8 +8,7 @@ enum bridgeStates {
     STATE_LIFT_PART_MOVING_DOWN,
     STATE_LIFT_PART_IS_DOWN,
     STATE_LIFT_PART_ABOUT_TO_MOVE_UP,
-    STATE_LIFT_PART_MOVING_UP,
-	STATE_BRIDGE_ALWAYS_UNLOCKED
+    STATE_LIFT_PART_MOVING_UP
 };
 
 class CBridge
@@ -26,5 +25,4 @@ public:
 	static bool ShouldLightsBeFlashing();
 	static void FindBridgeEntities();
 	static bool ThisIsABridgeObjectMovingUp(int);
-	static void ForceBridgeState(uint8 state);
 };

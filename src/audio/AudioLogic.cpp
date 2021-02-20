@@ -4366,18 +4366,14 @@ cAudioManager::ProcessPedOneShots(cPedParams &params)
 					if (weaponType == WEAPONTYPE_BRASSKNUCKLE) {
 						CPed* ped = params.m_pPed;
 						uint32 fightMove = ped->m_curFightMove;
-						// LCS:removed for now
-						//if (fightMove == FIGHTMOVE_BACKLEFT || fightMove == FIGHTMOVE_STDPUNCH || fightMove == FIGHTMOVE_PUNCH ||
-						if (
+						if (fightMove == FIGHTMOVE_BACKLEFT || fightMove == FIGHTMOVE_STDPUNCH || fightMove == FIGHTMOVE_PUNCH ||
 							ped->m_nPedState == PED_ATTACK) {
 							CEntity* damageEntity = ped->m_pDamageEntity;
 							if (!damageEntity)
 								m_sQueueSample.m_nSampleIndex = m_anRandomTable[3] % 2 + SFX_HAMMER_HIT_1;
 							else if (damageEntity->GetType() != ENTITY_TYPE_PED)
 								m_sQueueSample.m_nSampleIndex = m_anRandomTable[3] % 2 + SFX_HAMMER_HIT_1;
-							// LCS:removed for now
-							//else if (((CPed*)damageEntity)->m_curFightMove != FIGHTMOVE_HITHEAD)
-							else if(1)
+							else if (((CPed*)damageEntity)->m_curFightMove != FIGHTMOVE_HITHEAD)
 								m_sQueueSample.m_nSampleIndex = m_anRandomTable[3] % 2 + SFX_HAMMER_HIT_1;
 							else
 								m_sQueueSample.m_nSampleIndex = SFX_HAMMER_HIT_1;
@@ -5303,7 +5299,6 @@ cAudioManager::GetPedCommentSfx(CPed *ped, int32 sound)
 		case MI_MEDIC: return GetMedicTalkSfx(ped, sound);
 		case MI_FIREMAN: return GetFiremanTalkSfx(ped, sound);
 		case MI_MALE01: return GetDefaultTalkSfx(ped, sound);
-/*	LCS: removed for now
 		case MI_HFYST: return GetHFYSTTalkSfx(ped, sound);
 		case MI_HFOST: return GetHFOSTTalkSfx(ped, sound);
 		case MI_HMYST: return GetHMYSTTalkSfx(ped, sound);
@@ -5392,7 +5387,6 @@ cAudioManager::GetPedCommentSfx(CPed *ped, int32 sound)
 		case MI_BKB: return GetBKTalkSfx(ped, sound);
 		case MI_PGA:
 		case MI_PGB: return GetPGTalkSfx(ped, sound);
-*/
 		case MI_VICE1:
 		case MI_VICE2:
 		case MI_VICE3:
@@ -7576,8 +7570,7 @@ cAudioManager::GetSGTalkSfx(CPed *ped, int16 sound)
 	case SOUND_PED_CHAT: GetPhrase(sfx, ped->m_lastComment, 1064, 12); break;
 	default: return GetGenericMaleTalkSfx(ped, sound);
 	}
-// LCS removed for now
-//	if(ped->GetModelIndex() == MI_SGB) sfx += 93;
+	if(ped->GetModelIndex() == MI_SGB) sfx += 93;
 	return sfx;
 }
 
@@ -9313,8 +9306,7 @@ cAudioManager::ProcessBridge()
 void
 cAudioManager::ProcessBridgeWarning()
 {
-	// TODO: LCS
-/*	if (CStats::CommercialPassed && m_sQueueSample.m_fDistance < 450.f) {
+	if (CStats::CommercialPassed && m_sQueueSample.m_fDistance < 450.f) {
 		m_sQueueSample.m_nVolume = ComputeVolume(100, 450.f, m_sQueueSample.m_fDistance);
 		if (m_sQueueSample.m_nVolume != 0) {
 			m_sQueueSample.m_nCounter = 0;
@@ -9335,7 +9327,7 @@ cAudioManager::ProcessBridgeWarning()
 			m_sQueueSample.m_bRequireReflection = false;
 			AddSampleToRequestedQueue();
 		}
-	}*/
+	}
 }
 
 void
@@ -9411,7 +9403,7 @@ struct MissionAudioData {
 
 
 const MissionAudioData MissionAudioNameSfxAssoc[] = {
-	/*{"mobring", STREAMED_SOUND_MISSION_MOBR1},    {"pagring", STREAMED_SOUND_MISSION_PAGER},    {"carrev", STREAMED_SOUND_MISSION_CARREV},
+	{"mobring", STREAMED_SOUND_MISSION_MOBR1},    {"pagring", STREAMED_SOUND_MISSION_PAGER},    {"carrev", STREAMED_SOUND_MISSION_CARREV},
 	{"bikerev", STREAMED_SOUND_MISSION_BIKEREV},  {"liftop", STREAMED_SOUND_MISSION_LIFTOP},    {"liftcl", STREAMED_SOUND_MISSION_LIFTCL},
 	{"liftrun", STREAMED_SOUND_MISSION_LIFTRUN},  {"liftbel", STREAMED_SOUND_MISSION_LIFTBEL},  {"inlift", STREAMED_SOUND_MISSION_INLIFT},
 	{"caml", STREAMED_SOUND_MISSION_CAMERAL},     {"camr", STREAMED_SOUND_MISSION_CAMERAR},     {"cheer1", STREAMED_SOUND_MISSION_CHEER1},
@@ -9784,7 +9776,7 @@ const MissionAudioData MissionAudioNameSfxAssoc[] = {
 	{"bust_18", STREAMED_SOUND_MISSION_BUST_18},  {"bust_19", STREAMED_SOUND_MISSION_BUST_19},  {"bust_20", STREAMED_SOUND_MISSION_BUST_20},
 	{"bust_21", STREAMED_SOUND_MISSION_BUST_21},  {"bust_22", STREAMED_SOUND_MISSION_BUST_22},  {"bust_23", STREAMED_SOUND_MISSION_BUST_23},
 	{"bust_24", STREAMED_SOUND_MISSION_BUST_24},  {"bust_25", STREAMED_SOUND_MISSION_BUST_25},  {"bust_26", STREAMED_SOUND_MISSION_BUST_26},
-	{"bust_27", STREAMED_SOUND_MISSION_BUST_27},  {"bust_28", STREAMED_SOUND_MISSION_BUST_28}, */ {nil, 0} };
+	{"bust_27", STREAMED_SOUND_MISSION_BUST_27},  {"bust_28", STREAMED_SOUND_MISSION_BUST_28},  {nil, 0} };
 
 int32
 FindMissionAudioSfx(const char *name)
@@ -9851,8 +9843,8 @@ cAudioManager::PlayLoadedMissionAudio(uint8 slot)
 bool
 cAudioManager::ShouldDuckMissionAudio(uint8 slot) const
 {
-	//if (IsMissionAudioSamplePlaying(slot))
-	//	return m_sMissionAudio.m_nSampleIndex[slot] != STREAMED_SOUND_MISSION_ROK2_01;
+	if (IsMissionAudioSamplePlaying(slot))
+		return m_sMissionAudio.m_nSampleIndex[slot] != STREAMED_SOUND_MISSION_ROK2_01;
 	return false;
 }
 
@@ -9951,11 +9943,11 @@ cAudioManager::ProcessMissionAudioSlot(uint8 slot)
 				if (m_nUserPause)
 					SampleManager.PauseStream(1, slot + 1);
 				if (m_sMissionAudio.m_bPredefinedProperties[slot]) {
-					//if (m_sMissionAudio.m_nSampleIndex[slot] == STREAMED_SOUND_MISSION_CAMERAL)
-					//	SampleManager.SetStreamedVolumeAndPan(80, 0, 1, slot + 1);
-					//else if (m_sMissionAudio.m_nSampleIndex[slot] == STREAMED_SOUND_MISSION_CAMERAR)
-					//	SampleManager.SetStreamedVolumeAndPan(80, 127, 1, slot + 1);
-					//else
+					if (m_sMissionAudio.m_nSampleIndex[slot] == STREAMED_SOUND_MISSION_CAMERAL)
+						SampleManager.SetStreamedVolumeAndPan(80, 0, 1, slot + 1);
+					else if (m_sMissionAudio.m_nSampleIndex[slot] == STREAMED_SOUND_MISSION_CAMERAR)
+						SampleManager.SetStreamedVolumeAndPan(80, 127, 1, slot + 1);
+					else
 						SampleManager.SetStreamedVolumeAndPan(80, 63, 1, slot + 1);
 				} else {
 					distSquared = GetDistanceSquared(m_sMissionAudio.m_vecPos[slot]);
@@ -9977,8 +9969,8 @@ cAudioManager::ProcessMissionAudioSlot(uint8 slot)
 			}
 			m_sMissionAudio.m_nPlayStatus[slot] = PLAY_STATUS_PLAYING;
 			nCheckPlayingDelay[slot] = 30;
-			//if (m_sMissionAudio.m_nSampleIndex[slot] >= STREAMED_SOUND_MISSION_MOB_01A && m_sMissionAudio.m_nSampleIndex[slot] <= STREAMED_SOUND_MISSION_MOB_99A)
-			//	m_sMissionAudio.m_bIsMobile[slot] = true;
+			if (m_sMissionAudio.m_nSampleIndex[slot] >= STREAMED_SOUND_MISSION_MOB_01A && m_sMissionAudio.m_nSampleIndex[slot] <= STREAMED_SOUND_MISSION_MOB_99A)
+				m_sMissionAudio.m_bIsMobile[slot] = true;
 			break;
 		case PLAY_STATUS_PLAYING:
 			if (m_bTimerJustReset) {
@@ -10021,12 +10013,12 @@ cAudioManager::ProcessMissionAudioSlot(uint8 slot)
 							SampleManager.SetStreamedVolumeAndPan(emittingVol, pan, 1, slot + 1);
 						}
 					}
-				//} else if (m_sMissionAudio.m_nSampleIndex[slot] == STREAMED_SOUND_MISSION_ROK2_01) {
-				//	m_sMissionAudio.m_nPlayStatus[slot] = PLAY_STATUS_STOPPED;
+				} else if (m_sMissionAudio.m_nSampleIndex[slot] == STREAMED_SOUND_MISSION_ROK2_01) {
+					m_sMissionAudio.m_nPlayStatus[slot] = PLAY_STATUS_STOPPED;
 				} else {
 					m_sMissionAudio.m_nPlayStatus[slot] = PLAY_STATUS_FINISHED;
-					//if (m_sMissionAudio.m_nSampleIndex[slot] >= STREAMED_SOUND_MISSION_MOB_01A && m_sMissionAudio.m_nSampleIndex[slot] <= STREAMED_SOUND_MISSION_MOB_99A)
-					//	m_sMissionAudio.m_bIsMobile[slot] = false;
+					if (m_sMissionAudio.m_nSampleIndex[slot] >= STREAMED_SOUND_MISSION_MOB_01A && m_sMissionAudio.m_nSampleIndex[slot] <= STREAMED_SOUND_MISSION_MOB_99A)
+						m_sMissionAudio.m_bIsMobile[slot] = false;
 					m_sMissionAudio.m_nSampleIndex[slot] = NO_SAMPLE;
 					SampleManager.StopStreamedFile(slot + 1);
 					m_sMissionAudio.m_nMissionAudioCounter[slot] = 0;

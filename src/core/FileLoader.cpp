@@ -291,7 +291,7 @@ CFileLoader::LoadCollisionModel(uint8 *buf, CColModel &model, char *modelname)
 {
 	int i;
 
-	model.boundingSphere.radius = Max(*(float*)(buf), 0.1f);
+	model.boundingSphere.radius = *(float*)(buf);
 	model.boundingSphere.center.x = *(float*)(buf+4);
 	model.boundingSphere.center.y = *(float*)(buf+8);
 	model.boundingSphere.center.z = *(float*)(buf+12);
@@ -304,13 +304,10 @@ CFileLoader::LoadCollisionModel(uint8 *buf, CColModel &model, char *modelname)
 	model.numSpheres = *(int16*)(buf+40);
 	buf += 44;
 	if(model.numSpheres > 0){
-		model.spheres = new CColSphere[model.numSpheres];
+		model.spheres = (CColSphere*)RwMalloc(model.numSpheres*sizeof(CColSphere));
 		REGISTER_MEMPTR(&model.spheres);
 		for(i = 0; i < model.numSpheres; i++){
-			float radius = *(float*)buf;
-			if(radius > model.boundingSphere.radius)
-				model.boundingSphere.radius = radius + 0.01f;
-			model.spheres[i].Set(radius, *(CVector*)(buf+4), buf[16], buf[17]);
+			model.spheres[i].Set(*(float*)buf, *(CVector*)(buf+4), buf[16], buf[17]);
 			buf += 20;
 		}
 	}else
@@ -319,7 +316,7 @@ CFileLoader::LoadCollisionModel(uint8 *buf, CColModel &model, char *modelname)
 	model.numLines = *(int16*)buf;
 	buf += 4;
 	if(model.numLines > 0){
-		//model.lines = new CColLine[model.numLines];;
+		//model.lines = (CColLine*)RwMalloc(model.numLines*sizeof(CColLine));
 		REGISTER_MEMPTR(&model.lines);
 		for(i = 0; i < model.numLines; i++){
 			//model.lines[i].Set(*(CVector*)buf, *(CVector*)(buf+12));
@@ -333,7 +330,7 @@ CFileLoader::LoadCollisionModel(uint8 *buf, CColModel &model, char *modelname)
 	model.numBoxes = *(int16*)buf;
 	buf += 4;
 	if(model.numBoxes > 0){
-		model.boxes = new CColBox[model.numBoxes];
+		model.boxes = (CColBox*)RwMalloc(model.numBoxes*sizeof(CColBox));
 		REGISTER_MEMPTR(&model.boxes);
 		for(i = 0; i < model.numBoxes; i++){
 			model.boxes[i].Set(*(CVector*)buf, *(CVector*)(buf+12), buf[24], buf[25]);
@@ -345,7 +342,7 @@ CFileLoader::LoadCollisionModel(uint8 *buf, CColModel &model, char *modelname)
 	int32 numVertices = *(int16*)buf;
 	buf += 4;
 	if(numVertices > 0){
-		model.vertices = new CompressedVector[numVertices];
+		model.vertices = (CompressedVector*)RwMalloc(numVertices*sizeof(CompressedVector));
 		REGISTER_MEMPTR(&model.vertices);
 		for(i = 0; i < numVertices; i++){
 			model.vertices[i].Set(*(float*)buf, *(float*)(buf+4), *(float*)(buf+8));
@@ -363,64 +360,14 @@ CFileLoader::LoadCollisionModel(uint8 *buf, CColModel &model, char *modelname)
 	model.numTriangles = *(int16*)buf;
 	buf += 4;
 	if(model.numTriangles > 0){
-		model.triangles = new CColTriangle[model.numTriangles];
+		model.triangles = (CColTriangle*)RwMalloc(model.numTriangles*sizeof(CColTriangle));
 		REGISTER_MEMPTR(&model.triangles);
 		for(i = 0; i < model.numTriangles; i++){
 			model.triangles[i].Set(*(int32*)buf, *(int32*)(buf+4), *(int32*)(buf+8), buf[12]);
 			buf += 16;
-
-			// skip small triangles
-			CVector vA = model.vertices[model.triangles[i].a].Get();
-			CVector vB = model.vertices[model.triangles[i].b].Get();
-			CVector vC = model.vertices[model.triangles[i].c].Get();
-			float area = CrossProduct(vA - vB, vA - vC).Magnitude();
-			if(area < 0.001f || vA == vB || vA == vC || vB == vC){
-				i--;
-				model.numTriangles--;
-			}
 		}
 	}else
 		model.triangles = nil;
-
-	SplitColTrianglesIntoSections(model);
-}
-
-void
-CFileLoader::SplitColTrianglesIntoSections(CColModel &model)
-{
-	if(model.triangles == nil || model.numTriangles == 0)
-		return;
-
-	model.numTriBBoxes = 1;
-	model.triBBoxes = new CColTriBBox[1];
-	model.triBBoxes[0].first = 0;
-	model.triBBoxes[0].last = model.numTriangles-1;
-	CVector v = model.vertices[model.triangles[0].a].Get();
-	model.triBBoxes[0].Set(v, v);
-
-	for(int i = 0; i < model.numTriangles; i++){
-		CVector vA = model.vertices[model.triangles[i].a].Get();
-		CVector vB = model.vertices[model.triangles[i].b].Get();
-		CVector vC = model.vertices[model.triangles[i].c].Get();
-		model.triBBoxes[0].min.x = Min(vA.x, model.triBBoxes[0].min.x);
-		model.triBBoxes[0].min.y = Min(vA.y, model.triBBoxes[0].min.y);
-		model.triBBoxes[0].min.z = Min(vA.z, model.triBBoxes[0].min.z);
-		model.triBBoxes[0].min.x = Min(vB.x, model.triBBoxes[0].min.x);
-		model.triBBoxes[0].min.y = Min(vB.y, model.triBBoxes[0].min.y);
-		model.triBBoxes[0].min.z = Min(vB.z, model.triBBoxes[0].min.z);
-		model.triBBoxes[0].min.x = Min(vC.x, model.triBBoxes[0].min.x);
-		model.triBBoxes[0].min.y = Min(vC.y, model.triBBoxes[0].min.y);
-		model.triBBoxes[0].min.z = Min(vC.z, model.triBBoxes[0].min.z);
-		model.triBBoxes[0].max.x = Max(vA.x, model.triBBoxes[0].max.x);
-		model.triBBoxes[0].max.y = Max(vA.y, model.triBBoxes[0].max.y);
-		model.triBBoxes[0].max.z = Max(vA.z, model.triBBoxes[0].max.z);
-		model.triBBoxes[0].max.x = Max(vB.x, model.triBBoxes[0].max.x);
-		model.triBBoxes[0].max.y = Max(vB.y, model.triBBoxes[0].max.y);
-		model.triBBoxes[0].max.z = Max(vB.z, model.triBBoxes[0].max.z);
-		model.triBBoxes[0].max.x = Max(vC.x, model.triBBoxes[0].max.x);
-		model.triBBoxes[0].max.y = Max(vC.y, model.triBBoxes[0].max.y);
-		model.triBBoxes[0].max.z = Max(vC.z, model.triBBoxes[0].max.z);
-	}
 }
 
 static void
@@ -661,14 +608,11 @@ CFileLoader::LoadObjectTypes(const char *filename)
 	int section;
 	int pathIndex;
 	int id, pathType;
-	//int minID, maxID;
-
-	for(int i = 0; i < ARRAY_SIZE(m_sTempIdeData); i++)
-		m_sTempIdeData[i].id = -1;
+	int minID, maxID;
 
 	section = NONE;
-	//minID = INT32_MAX;
-	//maxID = -1;
+	minID = INT32_MAX;
+	maxID = -1;
 	pathIndex = -1;
 	debug("Loading object types from %s...\n", filename);
 
@@ -692,13 +636,13 @@ CFileLoader::LoadObjectTypes(const char *filename)
 		}else switch(section){
 		case OBJS:
 			id = LoadObject(line);
-			//if(id > maxID) maxID = id;
-			//if(id < minID) minID = id;
+			if(id > maxID) maxID = id;
+			if(id < minID) minID = id;
 			break;
 		case TOBJ:
 			id = LoadTimeObject(line);
-			//if(id > maxID) maxID = id;
-			//if(id < minID) minID = id;
+			if(id > maxID) maxID = id;
+			if(id < minID) minID = id;
 			break;
 		case WEAP:
 			LoadWeaponObject(line);
@@ -735,10 +679,10 @@ CFileLoader::LoadObjectTypes(const char *filename)
 	}
 	CFileMgr::CloseFile(fd);
 
-	for(id = 0; id < MODELINFOSIZE; id++){
+	for(id = minID; id <= maxID; id++){
 		CSimpleModelInfo *mi = (CSimpleModelInfo*)CModelInfo::GetModelInfo(id);
 		if(mi && mi->IsBuilding())
-			mi->SetupBigBuilding();
+			mi->SetupBigBuilding(minID, maxID);
 	}
 }
 
@@ -770,13 +714,6 @@ CFileLoader::LoadObject(const char *line)
 
 	if(sscanf(line, "%d %s %s %d", &id, model, txd, &numObjs) != 4)
 		return 0;	// game returns return value
-
-	for(int i = 0; i < ARRAY_SIZE(m_sTempIdeData); i++)
-		if(m_sTempIdeData[i].id == -1){
-			m_sTempIdeData[i].id = id;
-			strcpy(m_sTempIdeData[i].name, model);
-			break;
-		}
 
 	switch(numObjs){
 	case 1:
@@ -826,13 +763,6 @@ CFileLoader::LoadTimeObject(const char *line)
 	if(sscanf(line, "%d %s %s %d", &id, model, txd, &numObjs) != 4)
 		return 0;	// game returns return value
 
-	for(int i = 0; i < ARRAY_SIZE(m_sTempIdeData); i++)
-		if(m_sTempIdeData[i].id < 0){
-			m_sTempIdeData[i].id = id;
-			strcpy(m_sTempIdeData[i].name, model);
-			break;
-		}
-
 	switch(numObjs){
 	case 1:
 		sscanf(line, "%d %s %s %d %f %d %d %d",
@@ -863,7 +793,7 @@ CFileLoader::LoadTimeObject(const char *line)
 	mi->m_firstDamaged = damaged;
 	mi->SetTimes(timeOn, timeOff);
 	mi->SetTexDictionary(txd);
-	other = mi->FindOtherTimeModel(model);
+	other = mi->FindOtherTimeModel();
 	if(other)
 		other->SetOtherTimeModel(id);
 	MatchModelString(model, id);
@@ -887,7 +817,7 @@ CFileLoader::LoadWeaponObject(const char *line)
 	mi->m_lodDistances[0] = dist;
 	mi->SetTexDictionary(txd);
 	mi->SetAnimFile(animFile);
-	mi->SetColModel(&gpTempColModels->ms_colModelWeapon);
+	mi->SetColModel(&CTempColModels::ms_colModelWeapon);
 	MatchModelString(model, id);
 	return id;
 }
@@ -903,7 +833,7 @@ CFileLoader::LoadClumpObject(const char *line)
 		mi = CModelInfo::AddClumpModel(id);
 		mi->SetModelName(model);
 		mi->SetTexDictionary(txd);
-		mi->SetColModel(&gpTempColModels->ms_colModelBBox);
+		mi->SetColModel(&CTempColModels::ms_colModelBBox);
 	}
 }
 
@@ -915,15 +845,14 @@ CFileLoader::LoadVehicleObject(const char *line)
 	char type[8], handlingId[16], gamename[32], animFile[16], vehclass[12];
 	uint32 frequency, comprules;
 	int32 level, misc;
-	float wheelScale, normalSplay;
+	float wheelScale;
 	CVehicleModelInfo *mi;
 	char *p;
 
-	sscanf(line, "%d %s %s %s %s %s %s %s %d %d %x %d %f %f",
+	sscanf(line, "%d %s %s %s %s %s %s %s %d %d %x %d %f",
 		&id, model, txd,
 		type, handlingId, gamename, animFile, vehclass,
-		&frequency, &level, &comprules, &misc, &wheelScale,
-		&normalSplay);
+		&frequency, &level, &comprules, &misc, &wheelScale);
 
 	mi = CModelInfo::AddVehicleModel(id);
 	mi->SetModelName(model);
@@ -943,8 +872,6 @@ CFileLoader::LoadVehicleObject(const char *line)
 		mi->m_vehicleType = VEHICLE_TYPE_BOAT;
 	}else if(strcmp(type, "train") == 0){
 		mi->m_vehicleType = VEHICLE_TYPE_TRAIN;
-	}else if(strcmp(type, "ferry") == 0){
-		mi->m_vehicleType = VEHICLE_TYPE_FERRY;
 	}else if(strcmp(type, "heli") == 0){
 		mi->m_vehicleType = VEHICLE_TYPE_HELI;
 	}else if(strcmp(type, "plane") == 0){
@@ -1010,7 +937,7 @@ CFileLoader::LoadPedObject(const char *line)
 	mi->SetModelName(model);
 	mi->SetTexDictionary(txd);
 	mi->SetAnimFile(animFile);
-	mi->SetColModel(&gpTempColModels->ms_colModelPed1);
+	mi->SetColModel(&CTempColModels::ms_colModelPed1);
 	mi->m_pedType = CPedType::FindPedType(pedType);
 	mi->m_pedStatType = CPedStats::GetPedStatType(pedStats);
 	for(animGroupId = 0; animGroupId < NUM_ANIM_ASSOC_GROUPS; animGroupId++)

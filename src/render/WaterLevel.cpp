@@ -611,14 +611,14 @@ CWaterLevel::TestVisibilityForFineWaterBlocks(const CVector &worldPos)
 
 		if ((lineEnd.x > WORLD_MIN_X && lineEnd.x < WORLD_MAX_X) && (lineEnd.y > WORLD_MIN_Y && lineEnd.y < WORLD_MAX_Y))
 		{
-			if (!CWorld::ProcessLineOfSight(lineStart, lineEnd, col, entity, true, false, false, false, true, false, nil))
+			if (!CWorld::ProcessLineOfSight(lineStart, lineEnd, col, entity, true, false, false, false, true, false))
 			{
 				lineStart.x += 0.4f;
 				lineStart.y += 0.4f;
 				lineEnd.x += 0.4f;
 				lineEnd.y += 0.4f;
 
-				if (!CWorld::ProcessLineOfSight(lineStart, lineEnd, col, entity, true, false, false, false, true, false, nil))
+				if (!CWorld::ProcessLineOfSight(lineStart, lineEnd, col, entity, true, false, false, false, true, false))
 				{
 					return false;
 				}
@@ -1176,13 +1176,13 @@ CWaterLevel::RenderWater()
 	if ( WavesCalculatedThisFrame )
 	{
 		RenderSeaBirds();
-		//RenderShipsOnHorizon();
-		//CParticle::HandleShipsAtHorizonStuff();
-		//HandleBeachToysStuff();
+		RenderShipsOnHorizon();
+		CParticle::HandleShipsAtHorizonStuff();
+		HandleBeachToysStuff();
 	}
 	
-	//if ( _bSeaLife )
-	//	HandleSeaLifeForms();
+	if ( _bSeaLife )
+		HandleSeaLifeForms();
 
 	DefinedState();
 }
@@ -1202,6 +1202,8 @@ CWaterLevel::RenderTransparentWater(void)
 	if ( !CGame::CanSeeWaterFromCurrArea() )
 		return;
 	
+	PUSH_RENDERGROUP("CWaterLevel::RenderTransparentWater");
+
 	float fWaterDrawDist      = _GetWavyDrawDist();
 	float fWaterDrawDistLarge = fWaterDrawDist + 90.0f;
 	float fWavySectorMaxRenderDistSqr   = SQR(fWaterDrawDist);
@@ -1485,6 +1487,8 @@ CWaterLevel::RenderTransparentWater(void)
 
 	DefinedState();
 #endif
+
+	POP_RENDERGROUP();
 }
 
 void CWaterLevel::RenderOneFlatSmallWaterPoly(float fX, float fY, float fZ, RwRGBA const &color)
@@ -3106,7 +3110,6 @@ CWaterLevel::RenderShipsOnHorizon()
 	}
 }
 
-/*
 void
 CWaterLevel::HandleSeaLifeForms()
 {
@@ -3147,7 +3150,7 @@ CWaterLevel::HandleSeaLifeForms()
 	}
 	
 	CWaterCreatures::UpdateAll();
-}*/
+}
 
 void
 CWaterLevel::HandleBeachToysStuff(void)

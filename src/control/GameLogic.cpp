@@ -45,7 +45,6 @@ float CGameLogic::AfterDeathStartPointOrientation[NUM_SHORTCUT_START_POINTS];
 CVector CGameLogic::ShortCutDropOffForMission;
 float CGameLogic::ShortCutDropOffOrientationForMission;
 bool CGameLogic::MissionDropOffReadyToBeUsed;
-char CGameLogic::mStoredPlayerOutfit[8] = "plr3";
 
 #define SHORTCUT_TAXI_COST (9)
 #define TOTAL_BUSTED_AUDIO (28)
@@ -89,7 +88,7 @@ CGameLogic::SortOutStreamingAndMemory(const CVector &pos)
 	CStreaming::DeleteRwObjectsAfterDeath(pos);
 	CStreaming::RemoveUnusedModelsInLoadedList();
 	CGame::DrasticTidyUpMemory(true);
-	CWorld::Players[CWorld::PlayerInFocus].m_pPed->Undress(mStoredPlayerOutfit);
+	CWorld::Players[CWorld::PlayerInFocus].m_pPed->Undress("player");
 	CStreaming::LoadSceneCollision(pos);
 	CStreaming::LoadScene(pos);
 	CWorld::Players[CWorld::PlayerInFocus].m_pPed->Dress();
@@ -392,7 +391,7 @@ CGameLogic::RestorePlayerStuffDuringResurrection(CPlayerPed *pPlayerPed, CVector
 	CWorld::Add(pPlayerPed);
 	CHud::ResetWastedText();
 	CStreaming::StreamZoneModels(pos);
-	//clearWaterDrop = true;
+	clearWaterDrop = true;
 }
 
 void
@@ -419,7 +418,7 @@ CGameLogic::SetUpShortCut(CVector vStartPos, float fStartAngle, CVector vEndPos,
 	ShortCutStartOrientation = fStartAngle;
 	ShortCutDestination = vEndPos;
 	ShortCutDestinationOrientation = fEndAngle;
-	CStreaming::RequestModel(MI_CABBIE, 0);
+	CStreaming::RequestModel(MI_KAUFMAN, 0);
 }
 
 void
@@ -451,11 +450,11 @@ CGameLogic::UpdateShortCut()
 {
 	switch (ShortCutState) {
 	case SHORTCUT_INIT:
-		if (!CStreaming::HasModelLoaded(MI_CABBIE)) {
-			CStreaming::RequestModel(MI_CABBIE, 0);
+		if (!CStreaming::HasModelLoaded(MI_KAUFMAN)) {
+			CStreaming::RequestModel(MI_KAUFMAN, 0);
 			return;
 		}
-		pShortCutTaxi = new CAutomobile(MI_CABBIE, RANDOM_VEHICLE);
+		pShortCutTaxi = new CAutomobile(MI_KAUFMAN, RANDOM_VEHICLE);
 		if (!pShortCutTaxi)
 			return;
 		pShortCutTaxi->SetPosition(ShortCutStart);

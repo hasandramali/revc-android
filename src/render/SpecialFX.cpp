@@ -164,6 +164,7 @@ CSpecialFX::Shutdown(void)
 void
 CSpecialFX::Render(void)
 {
+	PUSH_RENDERGROUP("CSpecialFX::Render");
 	CMotionBlurStreaks::Render();
 	CBulletTraces::Render();
 	CBrightLights::Render();
@@ -173,6 +174,7 @@ CSpecialFX::Render(void)
 	if(!(gbNewRenderer && FredIsInFirstPersonCam()))
 #endif
 	C3dMarkers::Render();
+	POP_RENDERGROUP();
 }
 
 void
@@ -877,7 +879,7 @@ C3dMarkers::PlaceMarker(uint32 identifier, uint16 type, CVector &pos, float size
 			pMarker->m_Matrix.GetPosition() = pos;
 
 		if (pMarker->m_bFindZOnNextPlacement) {
-			if ((playerPos - pos).MagnitudeSqr() < sq(100.f) && CColStore::HasCollisionLoaded(pos)) {
+			if ((playerPos - pos).MagnitudeSqr() < sq(100.f) && CColStore::HasCollisionLoaded(CVector2D(pos))) {
 				float z = CWorld::FindGroundZFor3DCoord(pos.x, pos.y, pos.z + 1.0f, nil);
 				if (z != 0.0f)
 					pMarker->m_Matrix.GetPosition().z = z - 0.05f * size;
@@ -893,7 +895,7 @@ C3dMarkers::PlaceMarker(uint32 identifier, uint16 type, CVector &pos, float size
 
 	pMarker->AddMarker(identifier, type, size, r, g, b, a, pulsePeriod, pulseFraction, rotateRate);
 	if (type == MARKERTYPE_CYLINDER || type == MARKERTYPE_0 || type == MARKERTYPE_2) {
-		if ((playerPos - pos).MagnitudeSqr() < sq(100.f) && CColStore::HasCollisionLoaded(pos)) {
+		if ((playerPos - pos).MagnitudeSqr() < sq(100.f) && CColStore::HasCollisionLoaded(CVector2D(pos))) {
 			float z = CWorld::FindGroundZFor3DCoord(pos.x, pos.y, pos.z + 1.0f, nil);
 			if (z != 0.0f)
 				pos.z = z - 0.05f * size;

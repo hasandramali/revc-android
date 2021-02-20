@@ -185,7 +185,6 @@ public:
 	static int32 GetWaterAlpha(void) { return m_fCurrentWaterAlpha; }
 
 	static void Initialise(void);
-	static void UpdateArrays(void);
 	static void Update(void);
 	static float Interpolate(int8 *a, int8 *b);
 	static float Interpolate(uint8 *a, uint8 *b);

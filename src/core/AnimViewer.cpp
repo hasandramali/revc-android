@@ -81,7 +81,7 @@ CAnimViewer::Initialise(void) {
 	CCollision::Init();
 	CWorld::Initialise();
 	mod_HandlingManager.Initialise();
-	gpTempColModels->Initialise();
+	CTempColModels::Initialise();
 	CAnimManager::Initialise();
 	CModelInfo::Initialise();
 	CParticle::Initialise();

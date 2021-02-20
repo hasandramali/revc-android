@@ -2273,7 +2273,7 @@ WinMain(HINSTANCE instance,
 					case GS_START_UP:
 					{
 #ifdef NO_MOVIES
-						gGameState = GS_INIT_ONCE;
+						gGameState = gbNoMovies ? GS_INIT_ONCE : GS_INIT_LOGO_MPEG;
 #else
 						gGameState = GS_INIT_LOGO_MPEG;
 #endif
@@ -2314,8 +2314,11 @@ WinMain(HINSTANCE instance,
 					
 					case GS_INIT_INTRO_MPEG:
 					{
-#ifndef NO_MOVIES
+#ifdef NO_MOVIES
+						if (!gbNoMovies)
+#endif
 						CloseClip();
+#ifndef FIX_BUGS
 						CoUninitialize();
 #endif
 						
@@ -2353,8 +2356,11 @@ WinMain(HINSTANCE instance,
 					
 					case GS_INIT_ONCE:
 					{
-#ifndef NO_MOVIES
+#ifdef NO_MOVIES
+						if (!gbNoMovies)
+#endif
 						CloseClip();
+#ifndef FIX_BUGS
 						CoUninitialize();
 #endif
 						
@@ -2372,8 +2378,8 @@ WinMain(HINSTANCE instance,
 						
 						printf("Into TheGame!!!\n");
 #else				
-						LoadingScreen(nil, nil, "sceelee");
-						// LoadingScreen(nil, nil, "sceelee"); // duplicate
+						LoadingScreen(nil, nil, "loadsc0");
+						// LoadingScreen(nil, nil, "loadsc0"); // duplicate
 #endif
 						if ( !CGame::InitialiseOnceAfterRW() )
 							RsGlobal.quit = TRUE;
@@ -2390,8 +2396,8 @@ WinMain(HINSTANCE instance,
 #ifndef PS2_MENU
 					case GS_INIT_FRONTEND:
 					{
-						LoadingScreen(nil, nil, "sceelee");
-						// LoadingScreen(nil, nil, "sceelee"); // duplicate
+						LoadingScreen(nil, nil, "loadsc0");
+						// LoadingScreen(nil, nil, "loadsc0"); // duplicate
 						
 						FrontEndMenuManager.m_bGameNotLoaded = true;
 						

@@ -46,14 +46,13 @@ CustomMatCopy(void *dst, void *src, int32, int32)
 
 rw::TexDictionary *neoTxd;
 
-bool gGlassCarsCheat;
 bool bRenderingEnvMap;
-int32 EnvMapSize = 512;
+int32 EnvMapSize = 128;
 rw::Camera *EnvMapCam;
 rw::Texture *EnvMapTex;
 rw::Texture *EnvMaskTex;
-rw::RWDEVICE::Im2DVertex EnvScreenQuad[4];
-int16 QuadIndices[6] = { 0, 1, 2, 0, 2, 3 };
+static rw::RWDEVICE::Im2DVertex EnvScreenQuad[4];
+static int16 QuadIndices[6] = { 0, 1, 2, 0, 2, 3 };
 
 static rw::Camera*
 CreateEnvMapCam(rw::World *world)
@@ -342,7 +341,7 @@ ReadTweakValueTable(char *fp, InterpolatedValue &interp)
  * Neo Vehicle pipe
  */
 
-int32 VehiclePipeSwitch = VEHICLEPIPE_PS2;
+int32 VehiclePipeSwitch = VEHICLEPIPE_MATFX;
 float VehicleShininess = 1.0f;
 float VehicleSpecularity = 1.0f;
 InterpolatedFloat Fresnel(0.4f);
@@ -370,7 +369,6 @@ AttachVehiclePipe(rw::Clump *clump)
  * Neo World pipe
  */
 
-int32 WorldPipeSwitch = WORLDPIPE_PS2;
 bool LightmapEnable;
 float LightmapMult = 1.0f;
 InterpolatedFloat WorldLightmapBlend(1.0f);

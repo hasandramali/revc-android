@@ -17,10 +17,7 @@ enum StreamFlags
 	STREAMFLAGS_PRIORITY    = 0x08,
 	STREAMFLAGS_NOFADE      = 0x10,
 	STREAMFLAGS_20          = 0x20,	// TODO(MIAMI): what's this
-	STREAMFLAGS_40          = 0x40, // TODO(LCS): what's this
-	STREAMFLAGS_AMBIENT_SCRIPT_OWNED = 0x80,
 
-	// TODO(LCS): STREAMFLAGS_AMBIENT_SCRIPT_OWNED in STREAMFLAGS_CANT_REMOVE? check CColStore
 	STREAMFLAGS_CANT_REMOVE = STREAMFLAGS_DONT_REMOVE|STREAMFLAGS_SCRIPTOWNED,
 	STREAMFLAGS_KEEP_IN_MEMORY = STREAMFLAGS_DONT_REMOVE|STREAMFLAGS_SCRIPTOWNED|STREAMFLAGS_DEPENDENCY,
 };
@@ -130,7 +127,6 @@ public:
 	static bool HasColLoaded(int32 id) { return HasModelLoaded(id+STREAM_OFFSET_COL); }
 	static bool HasAnimLoaded(int32 id) { return HasModelLoaded(id+STREAM_OFFSET_ANIM); }
 	static bool CanRemoveModel(int32 id) { return (ms_aInfoForModel[id].m_flags & STREAMFLAGS_CANT_REMOVE) == 0; }
-	static bool IsScriptOwnedModel(int32 id) { return (ms_aInfoForModel[id].m_flags & STREAMFLAGS_SCRIPTOWNED); }
 	static bool CanRemoveTxd(int32 id) { return CanRemoveModel(id+STREAM_OFFSET_TXD); }
 	static bool CanRemoveCol(int32 id) { return CanRemoveModel(id+STREAM_OFFSET_COL); }
 	static bool CanRemoveAnim(int32 id) { return CanRemoveModel(id+STREAM_OFFSET_ANIM); }
@@ -214,17 +210,6 @@ public:
 	static void LoadScene(const CVector &pos);
 	static void LoadSceneCollision(const CVector &pos);
 
-	static void RegisterPointer(void *ptr, int, bool);
-	static RpAtomic *RegisterAtomic(RpAtomic *atomic, void *);
-	static void RegisterClump(RpClump *clump);
-	static RpAtomic *RegisterInstance(RpAtomic *atomic, void *);
-	static void RegisterInstance(RpClump *clump);
-	static void UnregisterPointer(void *ptr, int);
-	static RpAtomic *UnregisterAtomic(RpAtomic *atomic, void *);
-	static void UnregisterClump(RpClump *clump);
-	static RpAtomic *UnregisterInstance(RpAtomic *atomic, void *);
-	static void UnregisterInstance(RpClump *clump);
-
 	static void MemoryCardSave(uint8 *buffer, uint32 *length);
 	static void MemoryCardLoad(uint8 *buffer, uint32 length);
 
@@ -232,10 +217,3 @@ public:
 
 	static void PrintStreamingBufferState();
 };
-
-// LCS(TODO): put them into CStreaming::mspInst
-extern int32 islandLODindust;
-extern int32 islandLODcomInd;
-extern int32 islandLODcomSub;
-extern int32 islandLODsubInd;
-extern int32 islandLODsubCom;

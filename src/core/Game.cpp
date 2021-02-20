@@ -316,7 +316,7 @@ bool CGame::InitialiseOnceAfterRW(void)
 {
 	TheText.Load();
 	CTimer::Initialise();
-	gpTempColModels->Initialise();
+	CTempColModels::Initialise();
 	mod_HandlingManager.Initialise();
 	CSurfaceTable::Initialise("DATA\\SURFACE.DAT");
 	CPedStats::Initialise();
@@ -366,16 +366,13 @@ bool CGame::Initialise(const char* datFile)
 
 	CPools::Initialise();
 
-	if(gMakeResources)
-		CVehicleModelInfo::Load(nil);
-
 #ifndef GTA_PS2
 	CIniFile::LoadIniFile();
 #endif
 #ifdef USE_TEXTURE_POOL
 	_TexturePoolsUnknown(false);
 #endif
-	currLevel = LEVEL_INDUSTRIAL;
+	currLevel = LEVEL_BEACH;
 	currArea = AREA_MAIN_MAP;
 
 	PUSH_MEMID(MEMID_TEXTURES);
@@ -446,7 +443,7 @@ bool CGame::Initialise(const char* datFile)
 
 	CdStreamAddImage("MODELS\\GTA3.IMG");
 
-//	CFileLoader::LoadLevel("DATA\\DEFAULT.DAT");
+	CFileLoader::LoadLevel("DATA\\DEFAULT.DAT");
 	CFileLoader::LoadLevel(datFile);
 
 	LoadingScreen("Loading the Game", "Add Particles", nil);
@@ -589,7 +586,7 @@ bool CGame::ShutDown(void)
 	CPlane::Shutdown();
 	CTrain::Shutdown();
 	CScriptPaths::Shutdown();
-	//CWaterCreatures::RemoveAll();
+	CWaterCreatures::RemoveAll();
 	CSpecialFX::Shutdown();
 	CGarages::Shutdown();
 	CMovingThings::Shutdown();
@@ -663,9 +660,8 @@ void CGame::ReInitGameObjectVariables(void)
 	CDraw::SetFOV(120.0f);
 	CDraw::ms_fLODDistance = 500.0f;
 	CStreaming::RequestBigBuildings(LEVEL_GENERIC);
-	CStreaming::RemoveIslandsNotUsed(LEVEL_INDUSTRIAL);
-	CStreaming::RemoveIslandsNotUsed(LEVEL_COMMERCIAL);
-	CStreaming::RemoveIslandsNotUsed(LEVEL_SUBURBAN);
+	CStreaming::RemoveIslandsNotUsed(LEVEL_BEACH);
+	CStreaming::RemoveIslandsNotUsed(LEVEL_MAINLAND);
 	CStreaming::LoadAllRequestedModels(false);
 	currArea = AREA_MAIN_MAP;
 	CPed::Initialise();
@@ -751,7 +747,7 @@ void CGame::ShutDownForRestart(void)
 	CRadar::RemoveRadarSections();
 	FrontEndMenuManager.UnloadTextures();
 	CParticleObject::RemoveAllExpireableParticleObjects();
-	//CWaterCreatures::RemoveAll(); 
+	CWaterCreatures::RemoveAll(); 
 	CSetPieces::Init();
 	CPedType::Shutdown();
 	CSpecialFX::Shutdown();
@@ -856,9 +852,9 @@ void CGame::Process(void)
 		gameProcessPirateCheck = 2;
 	}
 #endif
-	//uint32 startTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond();
+	uint32 startTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond();
 	CStreaming::Update();
-	//uint32 processTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond() - startTime;
+	uint32 processTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond() - startTime;
 	CWindModifiers::Number = 0;
 	if (!CTimer::GetIsPaused())
 	{
@@ -897,20 +893,20 @@ void CGame::Process(void)
 		CEventList::Update();
 		CParticle::Update();
 		gFireManager.Update();
-		//if (processTime >= 2) {
-		//	CPopulation::Update(false);
-		//} else {
-		//	uint32 startTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond();
+		if (processTime >= 2) {
+			CPopulation::Update(false);
+		} else {
+			uint32 startTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond();
 			CPopulation::Update(true);
-		//	processTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond() - startTime;
-		//}
+			processTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond() - startTime;
+		}
 		CWeapon::UpdateWeapons();
 		if (!CCutsceneMgr::IsRunning())
 			CTheCarGenerators::Process();
 		if (!CReplay::IsPlayingBack())
 			CCranes::UpdateCranes();
 		CClouds::Update();
-		//CMovingThings::Update(); // TODO
+		CMovingThings::Update();
 		CWaterCannons::Update();
 		CUserDisplay::Process();
 		CReplay::Update();
@@ -941,7 +937,7 @@ void CGame::Process(void)
 		if (!CReplay::IsPlayingBack())
 		{
 			PUSH_MEMID(MEMID_CARS);
-			//if (processTime < 2)
+			if (processTime < 2)
 				CCarCtrl::GenerateRandomCars();
 			CRoadBlocks::GenerateRoadBlocks();
 			CCarCtrl::RemoveDistantCars();

@@ -38,22 +38,14 @@ enum eSprites
 	HUD_FIST,
 	HUD_SITEROCKET = 41,
 	HUD_RADARDISC = 50,
-	HUD_BAR_INSIDE1DARK = 57,
-	HUD_BAR_INSIDE2DARK,
-	HUD_HUDNUMBERS,
-	HUD_BAR_INSIDE1,
-	HUD_BAR_INSIDE2,
-	HUD_BAR_OUTLINE,
-	HUD_SITESNIPER,
+	HUD_SITESNIPER = 63,
 	HUD_SITEM16,
 	HUD_SITELASER,
 	HUD_LASERDOT,
 	HUD_VIEWFINDER,
 	HUD_BLEEDER,
-	NUM_HUD_SPRITES = 70,
+	NUM_HUD_SPRITES = 69,
 };
-
-extern float BigMessageInUse[6];
 
 class CHud
 {
@@ -90,6 +82,7 @@ public:
 	static int32 m_ClockState;
 
 	// These aren't really in CHud
+	static float BigMessageInUse[6];
 	static float BigMessageAlpha[6];
 	static float BigMessageX[6];
 	static float OddJob2OffTimer;
@@ -124,9 +117,6 @@ public:
 	static uint32 m_LastWeapon;
 	static uint32 m_LastTimeEnergyLost;
 
-	static wchar* gLastPrintForeverString;
-	static uint8 m_HudAlpha;
-
 public:
 	static void Draw();
 	static void DrawAfterFade();
@@ -146,9 +136,4 @@ public:
 	static void Shutdown();
 	static float DrawFadeState(DRAW_FADE_STATE, int);
 	static void ResetWastedText(void);
-	static void DrawHealthBar(int16 value);
-	static void DrawArmourBar(int16 value);
-	static void DrawTimeAndCashNumbers(char *str, float x, float y, bool secondSet);
-	static void DrawCash();
-	static void DrawTime();
 };

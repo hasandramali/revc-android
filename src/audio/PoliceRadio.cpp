@@ -547,7 +547,8 @@ cAudioManager::SetupSuspectLastSeenReport()
 						break;
 					case MI_TAXI:
 					case MI_CABBIE:
-					case MI_BORGNINE:
+					case MI_ZEBRA:
+					case MI_KAUFMAN:
 						sample = SFX_POLICE_RADIO_TAXI;
 						break;
 					case MI_BOBCAT:

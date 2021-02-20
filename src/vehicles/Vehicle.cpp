@@ -133,7 +133,6 @@ CVehicle::CVehicle(uint8 CreatedBy)
 	bCreatedAsPoliceVehicle = false;
 	bRestingOnPhysical = false;
 	bParking = false;
-	m_bGarageTurnedLightsOff = false;
 	bCanPark = CGeneral::GetRandomNumberInRange(0.0f, 1.0f) < 0.0f;	// never true. probably doesn't work very well
 	bIsVan = false;
 	bIsBus = false;
@@ -218,8 +217,8 @@ void
 CVehicle::SetModelIndex(uint32 id)
 {
 	CEntity::SetModelIndex(id);
-	m_aExtras[0] = CVehicleModelInfo::mspInfo->ms_compsUsed[0];
-	m_aExtras[1] = CVehicleModelInfo::mspInfo->ms_compsUsed[1];
+	m_aExtras[0] = CVehicleModelInfo::ms_compsUsed[0];
+	m_aExtras[1] = CVehicleModelInfo::ms_compsUsed[1];
 	m_nNumMaxPassengers = CVehicleModelInfo::GetMaximumNumberOfPassengersFromNumberOfDoors(id);
 }
 
@@ -772,9 +771,7 @@ CVehicle::BladeColSectorList(CPtrList &list, CColModel &rotorColModel, CMatrix &
 }
 
 
-float WS_ALREADY_SPINNING_LOSS = 0.2f;
-float WS_TRAC_FRAC_LIMIT = 0.3f;
-float fBurstSpeedMax = 0.2f;
+float fBurstSpeedMax = 0.3f;
 float fBurstTyreMod = 0.13f;
 
 void
@@ -802,15 +799,13 @@ CVehicle::ProcessWheel(CVector &wheelFwd, CVector &wheelRight, CVector &wheelCon
 	float contactSpeedFwd = DotProduct(wheelContactSpeed, wheelFwd);
 	float contactSpeedRight = DotProduct(wheelContactSpeed, wheelRight);
 
-	adhesion *= CTimer::GetTimeStep();
-	if(*wheelState != WHEEL_STATE_NORMAL){
+	if(*wheelState != WHEEL_STATE_NORMAL)
 		bAlreadySkidding = true;
-		adhesion *= pHandling->fTractionLoss;
-		if(*wheelState == WHEEL_STATE_SPINNING && (GetStatus() == STATUS_PLAYER || GetStatus() == STATUS_PLAYER_REMOTE))
-			adhesion *= 1.0f - Abs(m_fGasPedal) * WS_ALREADY_SPINNING_LOSS;
-	}
 	*wheelState = WHEEL_STATE_NORMAL;
 
+	adhesion *= CTimer::GetTimeStep();
+	if(bAlreadySkidding)
+		adhesion *= pHandling->fTractionLoss;
 
 	// moving sideways
 	if(contactSpeedRight != 0.0f){
@@ -850,15 +845,13 @@ CVehicle::ProcessWheel(CVector &wheelFwd, CVector &wheelRight, CVector &wheelCon
 		if(!bBraking){
 			if(m_fGasPedal < 0.01f){
 				if(IsBike())
-					brake = 0.6f * mod_HandlingManager.fWheelFriction / (pHandling->GetMass() + 200.0f);
-				else if(IsPlane())
-					brake = 0.0f;
-				else if(pHandling->GetMass() < 500.0f)
-					brake = 0.1f * mod_HandlingManager.fWheelFriction / pHandling->GetMass();
+					brake = 0.6f * mod_HandlingManager.fWheelFriction / (pHandling->fMass + 200.0f);
+				else if(pHandling->fMass < 500.0f)
+					brake = 0.2f * mod_HandlingManager.fWheelFriction / pHandling->fMass;
 				else if(GetModelIndex() == MI_RCBANDIT)
-					brake = 0.2f * mod_HandlingManager.fWheelFriction / pHandling->GetMass();
+					brake = 0.2f * mod_HandlingManager.fWheelFriction / pHandling->fMass;
 				else
-					brake = mod_HandlingManager.fWheelFriction / pHandling->GetMass();
+					brake = mod_HandlingManager.fWheelFriction / pHandling->fMass;
 #ifdef FIX_BUGS
 				brake *= CTimer::GetTimeStepFix();
 #endif
@@ -882,10 +875,7 @@ CVehicle::ProcessWheel(CVector &wheelFwd, CVector &wheelRight, CVector &wheelCon
 	float speedSq = sq(right) + sq(fwd);
 	if(sq(adhesion) < speedSq){
 		if(*wheelState != WHEEL_STATE_FIXED){
-			float tractionLimit = WS_TRAC_FRAC_LIMIT;
-			if(contactSpeedFwd > 0.15f && (wheelId == CARWHEEL_FRONT_LEFT || wheelId == CARWHEEL_FRONT_RIGHT))
-				tractionLimit *= 2.0f;
-			if(bDriving && tractionLimit*adhesion < Abs(fwd))
+			if(bDriving && contactSpeedFwd < 0.2f)
 				*wheelState = WHEEL_STATE_SPINNING;
 			else
 				*wheelState = WHEEL_STATE_SKIDDING;
@@ -893,8 +883,6 @@ CVehicle::ProcessWheel(CVector &wheelFwd, CVector &wheelRight, CVector &wheelCon
 
 		float l = Sqrt(speedSq);
 		float tractionLoss = bAlreadySkidding ? 1.0f : pHandling->fTractionLoss;
-		if(*wheelState == WHEEL_STATE_SPINNING && (GetStatus() == STATUS_PLAYER || GetStatus() == STATUS_PLAYER_REMOTE))
-			tractionLoss *= 1.0f - Abs(m_fGasPedal) * WS_ALREADY_SPINNING_LOSS;
 		right *= adhesion * tractionLoss / l;
 		fwd *= adhesion * tractionLoss / l;
 	}
@@ -903,7 +891,7 @@ CVehicle::ProcessWheel(CVector &wheelFwd, CVector &wheelRight, CVector &wheelCon
 		CVector totalSpeed = fwd*wheelFwd + right*wheelRight;
 
 		CVector turnDirection = totalSpeed;
-		bool separateTurnForce = false;
+		bool separateTurnForce = false;	// BUG: not initialized on PC
 		if(pHandling->fSuspensionAntidiveMultiplier > 0.0f){
 			if(bBraking){
 				separateTurnForce = true;
@@ -940,7 +928,6 @@ float fBurstBikeSpeedMax = 0.12f;
 float fBurstBikeTyreMod = 0.05f;
 float fTweakBikeWheelTurnForce = 2.0f;
 
-//--LCS: done
 void
 CVehicle::ProcessBikeWheel(CVector &wheelFwd, CVector &wheelRight, CVector &wheelContactSpeed, CVector &wheelContactPoint,
 	int32 wheelsOnGround, float thrust, float brake, float adhesion, float destabTraction, int8 wheelId, float *wheelSpeed, tWheelState *wheelState, eBikeWheelSpecial special, uint16 wheelStatus)
@@ -1861,7 +1848,8 @@ CVehicle::SetDriver(CPed *driver)
 
 		case MI_TAXI:
 		case MI_CABBIE:
-		case MI_BORGNINE:
+		case MI_ZEBRA:
+		case MI_KAUFMAN:
 			CWorld::Players[CWorld::PlayerInFocus].m_nMoney += 12;
 			break;
 

@@ -20,11 +20,3 @@ struct CColBox : public CBox
 
 	CColBox& operator=(const CColBox &other);
 };
-
-// no name for this
-// bounds for a number of triangles
-struct CColTriBBox : public CBox
-{
-	int32 first;
-	int32 last;
-};

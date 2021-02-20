@@ -3,20 +3,15 @@
 #include "Camera.h"
 #include "ModelInfo.h"
 #include "General.h"
-#include "KeyGen.h"
-
-base::cRelocatableChunkClassInfo CTimeModelInfo::msClassInfo("CTimeModelInfo", VTABLE_ADDR(&msClassInstance), sizeof(msClassInstance));
-CTimeModelInfo CTimeModelInfo::msClassInstance;
-
 
 CTimeModelInfo*
-CTimeModelInfo::FindOtherTimeModel(const char *modelname)
+CTimeModelInfo::FindOtherTimeModel(void)
 {
 	char name[40];
 	char *p;
 	int i;
 
-	strcpy(name, modelname);
+	strcpy(name, GetModelName());
 	// change _nt to _dy
 	if(p = strstr(name, "_nt"))
 		strncpy(p, "_dy", 4);
@@ -26,29 +21,13 @@ CTimeModelInfo::FindOtherTimeModel(const char *modelname)
 	else
 		return nil;
 
-	uint32 nameKey = CKeyGen::GetUppercaseKey(name);
-
 	for(i = 0; i < MODELINFOSIZE; i++){
 		CBaseModelInfo *mi = CModelInfo::GetModelInfo(i);
-		if (mi && mi->GetModelType() == MITYPE_TIME && nameKey == mi->GetNameHashKey()){
+		if (mi && mi->GetModelType() == MITYPE_TIME &&
+		   !CGeneral::faststrncmp(name, mi->GetModelName(), MAX_MODEL_NAME)){
 			m_otherTimeModelID = i;
 			return (CTimeModelInfo*)mi;
 		}
 	}
 	return nil;
-}
-
-
-void
-CTimeModelInfo::RcWriteThis(base::cRelocatableChunkWriter &writer)
-{
-	writer.AllocateRaw(this, sizeof(*this), sizeof(void*), false, true);
-	writer.Class(VTABLE_ADDR(this), msClassInfo);
-}
-
-void
-CTimeModelInfo::RcWriteEmpty(base::cRelocatableChunkWriter &writer)
-{
-	writer.AllocateRaw(this, sizeof(*this), sizeof(void*), false, true);
-	writer.Class(VTABLE_ADDR(this), msClassInfo);
 }

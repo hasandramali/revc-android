@@ -15,13 +15,11 @@ struct CColModel
 	int16 numBoxes;
 	int16 numTriangles;
 	int8 numLines;
-	int8 numTriBBoxes;
 	uint8 level;	// colstore slot but probably still named level
 	bool ownsCollisionVolumes;
 	CColSphere *spheres;
 	CColLine *lines;
 	CColBox *boxes;
-	CColTriBBox *triBBoxes;
 	CompressedVector *vertices;
 	CColTriangle *triangles;
 	CColTrianglePlane *trianglePlanes;
@@ -38,6 +36,4 @@ struct CColModel
 	void *operator new(size_t);
 	void operator delete(void *p, size_t);
 	CColModel& operator=(const CColModel& other);
-
-	bool Write(base::cRelocatableChunkWriter &writer, bool allocSpace);
 };

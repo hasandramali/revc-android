@@ -79,10 +79,9 @@ CBike::CBike(int32 id, uint8 CreatedBy)
 		m_bikeAnimType = ASSOCGRP_BIKE_STANDARD;
 		break;
 	case MI_SANCHEZ:
-	case MI_SANCHEZ2:
 		m_bikeAnimType = ASSOCGRP_BIKE_DIRT;
 		break;
-	default: m_bikeAnimType = ASSOCGRP_BIKE_STANDARD; //assert(0 && "invalid bike model ID"); // TODO
+	default: assert(0 && "invalid bike model ID");
 	}
 	m_vehType = VEHICLE_TYPE_BIKE;
 
@@ -110,7 +109,7 @@ CBike::CBike(int32 id, uint8 CreatedBy)
 	m_fTurnMass = pHandling->fTurnMass;
 	m_vecCentreOfMass = pHandling->CentreOfMass;
 	m_vecCentreOfMass.z = 0.1f;
-	m_fAirResistance = pHandling->fDragMult > 0.01f ? pHandling->fDragMult*0.0005f : pHandling->fDragMult;
+	m_fAirResistance = pHandling->Dimension.x*pHandling->Dimension.z/m_fMass;
 	m_fElasticity = 0.05f;
 	m_fBuoyancy = pHandling->fBuoyancy;
 
@@ -133,8 +132,6 @@ CBike::CBike(int32 id, uint8 CreatedBy)
 	bExtraSpeed = false;
 	bIsOnFire = false;
 	bWheelieCam = false;
-
-	bFixedColour = false; // <- figure out actual place (TODO)
 
 	m_fTireTemperature = 1.0f;
 	m_fBrakeDestabilization = 0.0f;
@@ -1725,7 +1722,7 @@ CBike::PreRender(void)
 						   TheCamera.GetLookDirection() == LOOKING_RIGHT)
 							pos1 -= 0.2f*GetForward();
 
-						//CParticle::AddParticle(PARTICLE_HEATHAZE, pos1, CVector(0.0f, 0.0f, 0.0f));
+						CParticle::AddParticle(PARTICLE_HEATHAZE, pos1, CVector(0.0f, 0.0f, 0.0f));
 					}
 				}
 			}

@@ -2,7 +2,6 @@
 #include "common.h"
 
 #include "main.h"
-#include "General.h"
 #include "Lights.h"
 #include "ModelInfo.h"
 #include "Treadable.h"
@@ -21,7 +20,6 @@
 #include "ModelIndices.h"
 #include "Streaming.h"
 #include "Shadows.h"
-#include "Coronas.h"
 #include "PointLights.h"
 #include "Occlusion.h"
 #include "Renderer.h"
@@ -39,8 +37,6 @@ bool gbDontRenderBigBuildings;
 bool gbDontRenderPeds;
 bool gbDontRenderObjects;
 bool gbDontRenderVehicles;
-
-bool gbRenderDebugEnvMap;
 
 // unused
 int16 TestCloseThings;
@@ -134,8 +130,13 @@ CRenderer::RenderOneRoad(CEntity *e)
 		return;
 	if(gbShowCollisionPolys)
 		CCollision::DrawColModel_Coloured(e->GetMatrix(), *CModelInfo::GetModelInfo(e->GetModelIndex())->GetColModel(), e->GetModelIndex());
-	else
+	else{
+		PUSH_RENDERGROUP(CModelInfo::GetModelInfo(e->GetModelIndex())->GetModelName());
+
 		e->Render();
+
+		POP_RENDERGROUP();
+	}
 }
 
 void
@@ -182,6 +183,8 @@ CRenderer::RenderOneNonRoad(CEntity *e)
 	}
 #endif
 
+	PUSH_RENDERGROUP(CModelInfo::GetModelInfo(e->GetModelIndex())->GetModelName());
+
 	resetLights = e->SetupLighting();
 
 	if(e->IsVehicle()){
@@ -210,6 +213,8 @@ CRenderer::RenderOneNonRoad(CEntity *e)
 	}
 
 	e->RemoveLighting(resetLights);
+
+	POP_RENDERGROUP();
 }
 
 void
@@ -235,6 +240,7 @@ CRenderer::RenderRoads(void)
 	int i;
 	CEntity *e;
 
+	PUSH_RENDERGROUP("CRenderer::RenderRoads");
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)TRUE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 	SetCullMode(rwCULLMODECULLBACK);
@@ -246,6 +252,7 @@ CRenderer::RenderRoads(void)
 		if(IsRoad(e))
 			RenderOneRoad(e);
 	}
+	POP_RENDERGROUP();
 }
 
 inline bool PutIntoSortedVehicleList(CVehicle *veh)
@@ -268,6 +275,7 @@ CRenderer::RenderEverythingBarRoads(void)
 	CEntity *e;
 	EntityInfo ei;
 
+	PUSH_RENDERGROUP("CRenderer::RenderEverythingBarRoads");
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)TRUE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 	SetCullMode(rwCULLMODECULLBACK);
@@ -299,6 +307,7 @@ CRenderer::RenderEverythingBarRoads(void)
 		}else
 			RenderOneNonRoad(e);
 	}
+	POP_RENDERGROUP();
 }
 
 void
@@ -306,6 +315,7 @@ CRenderer::RenderBoats(void)
 {
 	CLink<EntityInfo> *node;
 
+	PUSH_RENDERGROUP("CRenderer::RenderBoats");
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)TRUE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 	SetCullMode(rwCULLMODECULLBACK);
@@ -334,6 +344,7 @@ CRenderer::RenderBoats(void)
 		CVehicle *v = (CVehicle*)node->item.ent;
 		RenderOneNonRoad(v);
 	}
+	POP_RENDERGROUP();
 }
 
 #ifdef NEW_RENDERER
@@ -437,6 +448,7 @@ CRenderer::RenderWorld(int pass)
 	switch(pass){
 	case 0:
 		// Roads
+		PUSH_RENDERGROUP("CRenderer::RenderWorld - Roads");
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
 		for(i = 0; i < ms_nNoOfVisibleBuildings; i++){
 			e = ms_aVisibleBuildingPtrs[i];
@@ -450,9 +462,11 @@ CRenderer::RenderWorld(int pass)
 			if(e->bIsBIGBuilding || IsRoad(e))
 				RenderOneBuilding(e, node->item.sort);
 		}
+		POP_RENDERGROUP();
 		break;
 	case 1:
 		// Opaque
+		PUSH_RENDERGROUP("CRenderer::RenderWorld - Opaque");
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
 		for(i = 0; i < ms_nNoOfVisibleBuildings; i++){
 			e = ms_aVisibleBuildingPtrs[i];
@@ -473,14 +487,17 @@ CRenderer::RenderWorld(int pass)
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, FALSE);
 		WorldRender::RenderBlendPass(PASS_NOZ);
 		RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
+		POP_RENDERGROUP();
 		break;
 	case 2:
 		// Transparent
+		PUSH_RENDERGROUP("CRenderer::RenderWorld - Transparent");
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
 		WorldRender::RenderBlendPass(PASS_ADD);
 		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
 		WorldRender::RenderBlendPass(PASS_BLEND);
+		POP_RENDERGROUP();
 		break;
 	}
 }
@@ -491,11 +508,13 @@ CRenderer::RenderPeds(void)
 	int i;
 	CEntity *e;
 
+	PUSH_RENDERGROUP("CRenderer::RenderPeds");
 	for(i = 0; i < ms_nNoOfVisibleVehicles; i++){
 		e = ms_aVisibleVehiclePtrs[i];
 		if(e->IsPed())
 			RenderOneNonRoad(e);
 	}
+	POP_RENDERGROUP();
 }
 
 void
@@ -506,6 +525,7 @@ CRenderer::RenderVehicles(void)
 	EntityInfo ei;
 	CLink<EntityInfo> *node;
 
+	PUSH_RENDERGROUP("CRenderer::RenderVehicles");
 	// not the real thing
 	for(i = 0; i < ms_nNoOfVisibleVehicles; i++){
 		e = ms_aVisibleVehiclePtrs[i];
@@ -522,6 +542,7 @@ CRenderer::RenderVehicles(void)
 	    node != &gSortedVehiclesAndPeds.head;
 	    node = node->prev)
 		RenderOneNonRoad(node->item.ent);
+	POP_RENDERGROUP();
 }
 
 void
@@ -530,6 +551,7 @@ CRenderer::RenderTransparentWater(void)
 	int i;
 	CEntity *e;
 
+	PUSH_RENDERGROUP("CRenderer::RenderTransparentWater");
 	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, nil);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
@@ -553,6 +575,7 @@ CRenderer::RenderTransparentWater(void)
 	CWaterLevel::RenderTransparentWater();
 
 	SetStencilState(0);
+	POP_RENDERGROUP();
 }
 
 void
@@ -573,20 +596,24 @@ CRenderer::ClearForFrame(void)
 void
 CRenderer::RenderFadingInEntities(void)
 {
+	PUSH_RENDERGROUP("CRenderer::RenderFadingInEntities");
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)TRUE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 	SetCullMode(rwCULLMODECULLBACK);
 	DeActivateDirectional();
 	SetAmbientColours();
 	CVisibilityPlugins::RenderFadingEntities();
+	POP_RENDERGROUP();
 }
 
 void
 CRenderer::RenderFadingInUnderwaterEntities(void)
 {
+	PUSH_RENDERGROUP("CRenderer::RenderFadingInUnderwaterEntities");
 	DeActivateDirectional();
 	SetAmbientColours();
 	CVisibilityPlugins::RenderFadingUnderwaterEntities();
+	POP_RENDERGROUP();
 }
 
 void
@@ -1645,187 +1672,4 @@ CRenderer::RemoveVehiclePedLights(CEntity *ent, bool reset)
 	}
 	SetAmbientColours();
 	DeActivateDirectional();
-}
-
-
-#include "postfx.h"
-
-static RwIm2DVertex Screen2EnvQuad[4];
-static RwImVertexIndex EnvQuadIndices[6] = { 0, 1, 2, 0, 2, 3 };
-
-static void
-SetQuadVertices(RwRaster *env, RwRaster *screen, float z)
-{
-	uint32 width  = RwRasterGetWidth(env);
-	uint32 height = RwRasterGetHeight(env);
-
-	float zero, xmax, ymax;
-
-	zero = -HALFPX;
-	xmax = width - HALFPX;
-	ymax = height - HALFPX;
-
-	float recipz = 1.0f/z;
-	float umax = (float)SCREEN_WIDTH/RwRasterGetWidth(screen);
-	float vmax = (float)SCREEN_HEIGHT/RwRasterGetHeight(screen);
-
-	RwIm2DVertexSetScreenX(&Screen2EnvQuad[0], zero);
-	RwIm2DVertexSetScreenY(&Screen2EnvQuad[0], zero);
-	RwIm2DVertexSetScreenZ(&Screen2EnvQuad[0], RwIm2DGetNearScreenZ());
-	RwIm2DVertexSetCameraZ(&Screen2EnvQuad[0], z);
-	RwIm2DVertexSetRecipCameraZ(&Screen2EnvQuad[0], recipz);
-	RwIm2DVertexSetU(&Screen2EnvQuad[0], 0.0f, recipz);
-	RwIm2DVertexSetV(&Screen2EnvQuad[0], 0.0f, recipz);
-	RwIm2DVertexSetIntRGBA(&Screen2EnvQuad[0], 255, 255, 255, 255);
-
-	RwIm2DVertexSetScreenX(&Screen2EnvQuad[1], zero);
-	RwIm2DVertexSetScreenY(&Screen2EnvQuad[1], ymax);
-	RwIm2DVertexSetScreenZ(&Screen2EnvQuad[1], RwIm2DGetNearScreenZ());
-	RwIm2DVertexSetCameraZ(&Screen2EnvQuad[1], z);
-	RwIm2DVertexSetRecipCameraZ(&Screen2EnvQuad[1], recipz);
-	RwIm2DVertexSetU(&Screen2EnvQuad[1], 0.0f, recipz);
-	RwIm2DVertexSetV(&Screen2EnvQuad[1], vmax, recipz);
-	RwIm2DVertexSetIntRGBA(&Screen2EnvQuad[1], 255, 255, 255, 255);
-
-	RwIm2DVertexSetScreenX(&Screen2EnvQuad[2], xmax);
-	RwIm2DVertexSetScreenY(&Screen2EnvQuad[2], ymax);
-	RwIm2DVertexSetScreenZ(&Screen2EnvQuad[2], RwIm2DGetNearScreenZ());
-	RwIm2DVertexSetCameraZ(&Screen2EnvQuad[2], z);
-	RwIm2DVertexSetRecipCameraZ(&Screen2EnvQuad[2], recipz);
-	RwIm2DVertexSetU(&Screen2EnvQuad[2], umax, recipz);
-	RwIm2DVertexSetV(&Screen2EnvQuad[2], vmax, recipz);
-	RwIm2DVertexSetIntRGBA(&Screen2EnvQuad[2], 255, 255, 255, 255);
-
-	RwIm2DVertexSetScreenX(&Screen2EnvQuad[3], xmax);
-	RwIm2DVertexSetScreenY(&Screen2EnvQuad[3], zero);
-	RwIm2DVertexSetScreenZ(&Screen2EnvQuad[3], RwIm2DGetNearScreenZ());
-	RwIm2DVertexSetCameraZ(&Screen2EnvQuad[3], z);
-	RwIm2DVertexSetRecipCameraZ(&Screen2EnvQuad[3], recipz);
-	RwIm2DVertexSetU(&Screen2EnvQuad[3], umax, recipz);
-	RwIm2DVertexSetV(&Screen2EnvQuad[3], 0.0f, recipz);
-	RwIm2DVertexSetIntRGBA(&Screen2EnvQuad[3], 255, 255, 255, 255);
-}
-
-static RwIm2DVertex coronaVerts[4*4];
-static RwImVertexIndex coronaIndices[6*4];
-static int numCoronaVerts, numCoronaIndices;
-
-static void
-AddCorona(float x, float y, float sz)
-{
-	float nearz, recipz;
-	RwIm2DVertex *v;
-	nearz = RwIm2DGetNearScreenZ();
-	float z = RwCameraGetNearClipPlane(RwCameraGetCurrentCamera());
-	recipz = 1.0f/z;
-
-	v = &coronaVerts[numCoronaVerts];
-	RwIm2DVertexSetScreenX(&v[0], x);
-	RwIm2DVertexSetScreenY(&v[0], y);
-	RwIm2DVertexSetScreenZ(&v[0], z);
-	RwIm2DVertexSetScreenZ(&v[0], nearz);
-	RwIm2DVertexSetRecipCameraZ(&v[0], recipz);
-	RwIm2DVertexSetU(&v[0], 0.0f, recipz);
-	RwIm2DVertexSetV(&v[0], 0.0f, recipz);
-	RwIm2DVertexSetIntRGBA(&v[0], 255, 255, 255, 255);
-
-	RwIm2DVertexSetScreenX(&v[1], x);
-	RwIm2DVertexSetScreenY(&v[1], y + sz);
-	RwIm2DVertexSetScreenZ(&v[1], z);
-	RwIm2DVertexSetScreenZ(&v[1], nearz);
-	RwIm2DVertexSetRecipCameraZ(&v[1], recipz);
-	RwIm2DVertexSetU(&v[1], 0.0f, recipz);
-	RwIm2DVertexSetV(&v[1], 1.0f, recipz);
-	RwIm2DVertexSetIntRGBA(&v[1], 255, 255, 255, 255);
-
-	RwIm2DVertexSetScreenX(&v[2], x + sz);
-	RwIm2DVertexSetScreenY(&v[2], y + sz);
-	RwIm2DVertexSetScreenZ(&v[2], z);
-	RwIm2DVertexSetScreenZ(&v[2], nearz);
-	RwIm2DVertexSetRecipCameraZ(&v[2], recipz);
-	RwIm2DVertexSetU(&v[2], 1.0f, recipz);
-	RwIm2DVertexSetV(&v[2], 1.0f, recipz);
-	RwIm2DVertexSetIntRGBA(&v[2], 255, 255, 255, 255);
-
-	RwIm2DVertexSetScreenX(&v[3], x + sz);
-	RwIm2DVertexSetScreenY(&v[3], y);
-	RwIm2DVertexSetScreenZ(&v[3], z);
-	RwIm2DVertexSetScreenZ(&v[3], nearz);
-	RwIm2DVertexSetRecipCameraZ(&v[3], recipz);
-	RwIm2DVertexSetU(&v[3], 1.0f, recipz);
-	RwIm2DVertexSetV(&v[3], 0.0f, recipz);
-	RwIm2DVertexSetIntRGBA(&v[3], 255, 255, 255, 255);
-
-
-	coronaIndices[numCoronaIndices++] = numCoronaVerts;
-	coronaIndices[numCoronaIndices++] = numCoronaVerts + 1;
-	coronaIndices[numCoronaIndices++] = numCoronaVerts + 2;
-	coronaIndices[numCoronaIndices++] = numCoronaVerts;
-	coronaIndices[numCoronaIndices++] = numCoronaVerts + 2;
-	coronaIndices[numCoronaIndices++] = numCoronaVerts + 3;
-	numCoronaVerts += 4;
-}
-#include "Debug.h"
-
-static void
-DrawEnvMapCoronas(float heading)
-{
-	RwRaster *rt = RwTextureGetRaster(CustomPipes::EnvMapTex);
-	const float BIG = 89.0f * RwRasterGetWidth(rt)/128.0f;
-	const float SMALL = 38.0f * RwRasterGetHeight(rt)/128.0f;
-
-	float x;
-	numCoronaVerts = 0;
-	numCoronaIndices = 0;
-	x = (heading - PI)/TWOPI;// - 1.0f;
-	x *= BIG+SMALL;
-	AddCorona(x, 0.0f, BIG);	x += BIG;
-	AddCorona(x, 12.0f, SMALL);	x += SMALL;
-	AddCorona(x, 0.0f, BIG);	x += BIG;
-	AddCorona(x, 12.0f, SMALL);	x += SMALL;
-
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
-	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(gpCoronaTexture[CCoronas::TYPE_STAR]));
-	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, coronaVerts, numCoronaVerts, coronaIndices, numCoronaIndices);
-	RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
-	RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
-}
-
-void
-CRenderer::GenerateEnvironmentMap(void)
-{
-	// We'll probably do this differently eventually
-	// re-using all sorts of stuff here...
-
-	CPostFX::GetBackBuffer(Scene.camera);
-
-	RwCameraBeginUpdate(CustomPipes::EnvMapCam);
-
-	// get current scene
-	SetQuadVertices(RwTextureGetRaster(CustomPipes::EnvMapTex), CPostFX::pBackBuffer, RwCameraGetNearClipPlane(RwCameraGetCurrentCamera()));
-	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)FALSE);
-	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
-	RwRenderStateSet(rwRENDERSTATETEXTURERASTER, CPostFX::pBackBuffer);
-	RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
-	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)FALSE);
-	RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, Screen2EnvQuad, 4, EnvQuadIndices, 6);
-	RwRenderStateSet(rwRENDERSTATEZTESTENABLE, (void*)TRUE);
-	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)TRUE);
-
-	// Draw coronas
-	if(CustomPipes::VehiclePipeSwitch != CustomPipes::VEHICLEPIPE_MOBILE)
-		DrawEnvMapCoronas(TheCamera.GetForward().Heading());
-
-	RwCameraEndUpdate(CustomPipes::EnvMapCam);
-
-
-	RwCameraBeginUpdate(Scene.camera);
-
-	if(gbRenderDebugEnvMap){
-		RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(CustomPipes::EnvMapTex));
-		RwIm2DRenderIndexedPrimitive(rwPRIMTYPETRILIST, CustomPipes::EnvScreenQuad, 4, (RwImVertexIndex*)CustomPipes::QuadIndices, 6);
-	}
 }

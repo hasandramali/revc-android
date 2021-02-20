@@ -100,31 +100,9 @@ enum PedFightMoves
 {
 	FIGHTMOVE_NULL,
 	// Attacker
-//	FIGHTMOVE_STDPUNCH,
+	FIGHTMOVE_STDPUNCH,
 	FIGHTMOVE_IDLE,
 	FIGHTMOVE_SHUFFLE_F,
-	// Combos
-	FIGHTMOVE_COMBO_A1,
-	FIGHTMOVE_COMBO_A2,
-	FIGHTMOVE_COMBO_A3,
-	FIGHTMOVE_COMBO_B1,
-	FIGHTMOVE_COMBO_B2,
-	FIGHTMOVE_COMBO_B3,
-	// Melee
-	FIGHTMOVE_MELEE1,
-	FIGHTMOVE_MELEE2,
-	FIGHTMOVE_MELEE3,
-	// Special
-	FIGHTMOVE_GROUNDKICK,
-	// Opponent
-	FIGHTMOVE_HITFRONT,
-	FIGHTMOVE_HITBACK,
-	FIGHTMOVE_HITRIGHT,
-	FIGHTMOVE_HITLEFT,
-	FIGHTMOVE_HITONFLOOR,
-	FIGHTMOVE_HITBEHIND,
-	FIGHTMOVE_IDLE2NORM,
-/*
 	FIGHTMOVE_KNEE,
 	FIGHTMOVE_PUNCHHOOK,
 	FIGHTMOVE_PUNCHJAB,
@@ -156,16 +134,7 @@ enum PedFightMoves
 	FIGHTMOVE_MELEE2,
 	FIGHTMOVE_MELEE3,
 	FIGHTMOVE_IDLE2NORM,
-*/
-
-	NUM_FIGHTMOVES,
-
-	// LCS replacements for the old names:
-	// NB: this may be totally bogus, i just need it to compile
-	FIGHTMOVE_PUNCH = FIGHTMOVE_COMBO_A2,
-	FIGHTMOVE_FWDRIGHT = FIGHTMOVE_COMBO_B1,
-	FIGHTMOVE_LONGKICK = FIGHTMOVE_COMBO_B2,
-	FIGHTMOVE_ROUNDHOUSE = FIGHTMOVE_COMBO_B3,
+	NUM_FIGHTMOVES
 };
 
 enum ePedPieceTypes
@@ -406,7 +375,7 @@ public:
 	float m_fCollisionSpeed;
 
 	// cf. https://github.com/DK22Pac/plugin-sdk/blob/master/plugin_sa/game_sa/CPed.h from R*
-	uint32 bIsStanding : 1; // 0x194 on PS2, 0x1A4 on android
+	uint32 bIsStanding : 1;
 	uint32 bWasStanding : 1;
 	uint32 bIsAttacking : 1;		// doesn't reset after fist fight
 	uint32 bIsPointingGunAt : 1;
@@ -499,7 +468,7 @@ public:
 	uint32 bIsDrowning : 1;
 	uint32 bDrownsInWater : 1;
 	uint32 bWaitForLeaderToComeCloser : 1;
-	uint32 bHeldHostageInCar : 1; // one flag was added somewhere after this one (TODO: figure out where and which)
+	uint32 bHeldHostageInCar : 1;
 	uint32 bIsPlayerFriend : 1;
 	uint32 bHeadStuckInCollision : 1;
 	uint32 bDeadPedInFrontOfCar : 1;
@@ -512,7 +481,7 @@ public:
 	uint32 bMakeFleeScream : 1;
 	uint32 bPushedAlongByCar : 1;
 	uint32 bRemoveMeWhenIGotIntoCar : 1;
-	uint32 bIgnoreThreatsBehindObjects : 1; // one flag was added somewhere before this one (TODO: figure out where and which)
+	uint32 bIgnoreThreatsBehindObjects : 1;
 
 	uint32 bNeverEverTargetThisPed : 1;
 	uint32 bCrouchWhenScared : 1;
@@ -521,42 +490,18 @@ public:
 	uint32 bCollectBusFare : 1;
 	uint32 bBoughtIceCream : 1;
 	uint32 bDonePositionOutOfCollision : 1;
-
-	uint32 bCanAttackPlayerWithCops : 1; // 1A1_1 on PS2
-	uint32 bOnlyAllowedToSitBehind : 1;
-	uint32 bOnlyAllowedToSitInFront : 1;
-	uint32 b1A1_8 : 1;
-	uint32 b1A1_10 : 1;
-	uint32 bOverrideMoveAnim : 1;
+	uint32 bCanAttackPlayerWithCops : 1;
 
 #ifdef KANGAROO_CHEAT
 	// our own flags
 	uint32 m_ped_flagI80 : 1; // KANGAROO_CHEAT define makes use of this as cheat toggle 
 #endif
 
-	uint16 m_gangFlags; // <- this one is uint16
-
-	uint8 bDropsWeaponsOnDeath : 1;
-	uint8 b1A4_2 : 1;
-	uint8 bAttacksPlayerWithCops : 1;
-	uint8 b1A4_8 : 1;
-	uint8 b1A4_10 : 1;
-	uint8 b1A4_20 : 1;
-	uint8 b1A4_40 : 1;
-	uint8 b1A4_80 : 1;
-
-	uint8 bCanBeTargettedByLeader : 1;
-	uint8 b1A5_2 : 1;
-	uint8 b1A5_4 : 1;
-	uint8 b1A5_8 : 1;
-	uint8 b1A5_10 : 1;
-	uint8 b1A5_20 : 1;
-	uint8 b1A5_40 : 1;
-	uint8 b1A5_80 : 1;
-
-	uint8 unk_1A6; // <- init with 100 in constructor
-
-	uint8 CharCreatedBy; // 1AC
+	uint8 m_gangFlags;
+	uint8 m_unused15D; // these 3 can't be padding but had to actually have been members ...
+	uint8 m_unused15E;
+	uint8 m_unused15F;
+	uint8 CharCreatedBy;
 	eObjective m_objective;
 	eObjective m_prevObjective;
 	CPed *m_pedInObjective;
@@ -605,8 +550,6 @@ public:
 	float m_fHealth;
 	float m_fArmour;
 	uint32 m_nExtendedRangeTimer;
-	uint32 m_nScriptShootTimer;
-	uint32 m_nScriptAttackTimer;
 	int16 m_routeLastPoint;
 	uint16 m_routeStartPoint;
 	int16 m_routePointsPassed;
@@ -706,7 +649,6 @@ public:
 	uint32 m_lastComment;
 	CVector m_vecSpotToGuard;
 	float m_radiusToGuard;
-	float m_fMaxHealth;
 
 	static void *operator new(size_t);
 	static void *operator new(size_t, int);
@@ -776,7 +718,6 @@ public:
 	void SetObjective(eObjective);
 	void SetObjective(eObjective, int16, int16);
 	void SetObjective(eObjective, CVector);
-	void SetObjective(eObjective, CVector, float);
 	void SetObjective(eObjective, float, const CVector&);
 	void ClearChat(void);
 	void InformMyGangOfAttack(CEntity*);
@@ -909,7 +850,6 @@ public:
 	void SetSolicit(uint32 time);
 	void ScanForInterestingStuff(void);
 	void WarpPedIntoCar(CVehicle*);
-	void WarpPedIntoCarAsPassenger(CVehicle*, int32);
 	void SetCarJack(CVehicle*);
 	bool WarpPedToNearLeaderOffScreen(void);
 	void Solicit(void);
@@ -1064,16 +1004,6 @@ public:
 	{
 		return m_pMyVehicle != nil && ((CEntity*)m_pMyVehicle)->GetStatus() != STATUS_WRECKED;
 	}
-	bool CanStartMission() // used in CAN_PLAYER_START_MISSION and can looks like inlined function
-	{
-		if (m_nPedState >= PED_WANDER_RANGE && m_nPedState < PED_STATES_NO_AI && m_nPedState != PED_ANSWER_MOBILE)
-			return false;
-		if (m_nPedState >= PED_JUMP && m_nPedState < PED_STATES_NO_ST)
-			return false;
-		if (m_nPedState >= PED_ENTER_TRAIN && m_nPedState < PED_DEPLOY_STINGER)
-			return false;
-		return !bIsInTheAir && !bIsLanding && m_fHealth > 0.0f;
-	}
 
 	// My names. Inlined in VC
 	AnimationId GetFireAnimNotDucking(CWeaponInfo* weapon) {
@@ -1092,7 +1022,7 @@ public:
 
 	static AnimationId GetFireAnimGround(CWeaponInfo* weapon, bool kickFloorIfNone = true) {
 		if (weapon->IsFlagSet(WEAPONFLAG_GROUND_2ND))
-			return ANIM_ATTACK_2;
+			return ANIM_WEAPON_CROUCHFIRE;
 		else if (weapon->IsFlagSet(WEAPONFLAG_GROUND_3RD))
 			return ANIM_WEAPON_FIRE_3RD;
 		else if (kickFloorIfNone)
@@ -1105,26 +1035,26 @@ public:
 		if (weapon->IsFlagSet(WEAPONFLAG_ANIMDETONATE))
 			return ANIM_STD_DETONATE;
 		else
-			return ANIM_ATTACK_1;
+			return ANIM_WEAPON_FIRE;
 	}
 
 	static AnimationId GetCrouchReloadAnim(CWeaponInfo* weapon) {
 		if (weapon->IsFlagSet(WEAPONFLAG_RELOAD))
-			return ANIM_ATTACK_EXTRA2;
+			return ANIM_WEAPON_CROUCHRELOAD;
 		else
 			return (AnimationId)0;
 	}
 
 	static AnimationId GetCrouchFireAnim(CWeaponInfo* weapon) {
 		if (weapon->IsFlagSet(WEAPONFLAG_CROUCHFIRE))
-			return ANIM_ATTACK_2;
+			return ANIM_WEAPON_CROUCHFIRE;
 		else
 			return (AnimationId)0;
 	}
 
 	static AnimationId GetReloadAnim(CWeaponInfo* weapon) {
 		if (weapon->IsFlagSet(WEAPONFLAG_RELOAD))
-			return ANIM_ATTACK_EXTRA1;
+			return ANIM_WEAPON_RELOAD;
 		else
 			return (AnimationId)0;
 	}

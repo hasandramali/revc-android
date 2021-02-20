@@ -10,15 +10,15 @@ enum Config {
 	MAX_CDIMAGES = 8, // additional cdimages
 	MAX_CDCHANNELS = 5,
 
-	MODELINFOSIZE = 6500,	// only 4900
-	TXDSTORESIZE = 1385,	// only 1200
-	COLSTORESIZE = 31,	// only 15
+	MODELINFOSIZE = 6500,	// 4900 on PS2
+	TXDSTORESIZE = 1385,
+	COLSTORESIZE = 31,
 	EXTRADIRSIZE = 256,
 	CUTSCENEDIRSIZE = 512,
 
 	SIMPLEMODELSIZE = 3885,
 	TIMEMODELSIZE = 385,
-	CLUMPMODELSIZE = 10,
+	CLUMPMODELSIZE = 5,
 	WEAPONMODELSIZE = 37,
 	PEDMODELSIZE = 130,
 	VEHICLEMODELSIZE = 110,
@@ -29,19 +29,19 @@ enum Config {
 	NUMOBJECTINFO = 210,
 
 	// Pool sizes
-	NUMPTRNODES = 50000,	// only 30100
-	NUMENTRYINFOS = 4000,
-	NUMPEDS = 140,		// only 70
-	NUMVEHICLES = 110,	// only 70
-	NUMBUILDINGS = 7000,	// only 6757
-	NUMTREADABLES = 1300,
-	NUMOBJECTS = 475,
-	NUMDUMMIES = 3000,
+	NUMPTRNODES = 50000,
+	NUMENTRYINFOS = 3200,
+	NUMPEDS = 140,
+	NUMVEHICLES = 110,
+	NUMBUILDINGS = 7000,
+	NUMTREADABLES = 1,
+	NUMOBJECTS = 460,
+	NUMDUMMIES = 2340,
 	NUMAUDIOSCRIPTOBJECTS = 192,
 	NUMCOLMODELS = 4400,
 	NUMCUTSCENEOBJECTS = 50,	// not a pool in VC
 
-	NUMANIMBLOCKS = 60,
+	NUMANIMBLOCKS = 35,
 	NUMANIMATIONS = 450,
 
 	NUMTEMPOBJECTS = 40,
@@ -61,20 +61,20 @@ enum Config {
 	NUMREFERENCES = 800,
 
 	// Zones
-	NUMAUDIOZONES = 36,
+	NUMAUDIOZONES = 14,
 	NUMINFOZONES = 169,
-	NUMMAPZONES = 110,
-	NUMNAVIGZONES = 70,
+	NUMMAPZONES = 39,
+	NUMNAVIGZONES = 20,
 
 	// Cull zones
-	NUMATTRIBZONES = 900,
+	NUMATTRIBZONES = 704,
 
 	NUMOCCLUSIONVOLUMES = 350,
 	NUMACTIVEOCCLUDERS = 48,
 
 	PATHNODESIZE = 4500,
 
-	NUMWEATHERS = 8,
+	NUMWEATHERS = 7,
 	NUMHOURS = 24,
 
 	NUMEXTRADIRECTIONALS = 4,
@@ -100,7 +100,7 @@ enum Config {
 	NUMPACMANPICKUPS = 256,
 	NUMEVENTS = 64,
 
-	NUM_CARGENS = 500,
+	NUM_CARGENS = 185,
 
 	NUM_PATH_NODES_IN_AUTOPILOT = 8,
 
@@ -114,7 +114,7 @@ enum Config {
 	NUM_WATERCANNONS = 3,
 
 	NUMPEDROUTES = 200,
-	NUMPHONES = 60,
+	NUMPHONES = 50,
 	NUMPEDGROUPS = 67,
 	NUMMODELSPERPEDGROUP = 16,
 	MAXZONEPEDSLOADED = 8,
@@ -139,7 +139,7 @@ enum Config {
 
 	NUM_GARAGE_STORED_CARS = 4,
 
-	NUM_CRANES = 11,
+	NUM_CRANES = 8,
 	NUM_ESCALATORS = 22,
 	NUM_WATER_CREATURES = 8,
 
@@ -204,9 +204,6 @@ enum Config {
 //#define COMPRESSED_COL_VECTORS	// use compressed vectors for collision vertices
 //#define ANIM_COMPRESSION	// only keep most recently used anims uncompressed
 
-#define GTA_TRAIN
-#define GTA_BRIDGE
-
 #if defined GTA_PS2
 #	define GTA_PS2_STUFF
 #	define RANDOMSPLASH
@@ -219,7 +216,7 @@ enum Config {
 #		define PS2_MATFX
 #	endif
 #	define PC_PLAYER_CONTROLS	// mouse player/cam mode
-//#	define GTA_REPLAY
+#	define GTA_REPLAY
 #	define GTA_SCENE_EDIT
 #elif defined GTA_XBOX
 #endif
@@ -235,7 +232,6 @@ enum Config {
 	// not in master builds
 	#define VALIDATE_SAVE_SIZE
 
-	#define NO_MOVIES	// disable intro videos
 	#define DEBUGMENU
 #endif
 
@@ -249,10 +245,12 @@ enum Config {
 #endif
 
 #define FIX_BUGS		// fixes bugs that we've came across during reversing. You can undefine this only on release builds.
-//#define MORE_LANGUAGES		// Add more translations to the game
+#define MORE_LANGUAGES		// Add more translations to the game
 #define COMPATIBLE_SAVES // this allows changing structs while keeping saves compatible
 #define LOAD_INI_SETTINGS // as the name suggests. fundamental for CUSTOM_FRONTEND_OPTIONS
 #define FIX_HIGH_FPS_BUGS_ON_FRONTEND
+
+#define NO_MOVIES	// add option to disable intro videos
 
 #if defined(__LP64__) || defined(_WIN64)
 #define FIX_BUGS_64 // Must have fixes to be able to run 64 bit build
@@ -277,7 +275,7 @@ enum Config {
 #define USE_TXD_CDIMAGE		// generate and load textures from txd.img
 #define PS2_ALPHA_TEST		// emulate ps2 alpha test 
 #define IMPROVED_VIDEOMODE	// save and load videomode parameters instead of a magic number
-//#define DISABLE_LOADING_SCREEN // disable the loading screen which vastly improves the loading time
+#define DISABLE_LOADING_SCREEN // disable the loading screen which vastly improves the loading time
 #define DISABLE_VSYNC_ON_TEXTURE_CONVERSION // make texture conversion work faster by disabling vsync
 #define ANISOTROPIC_FILTERING	// set all textures to max anisotropic filtering
 //#define USE_TEXTURE_POOL
@@ -297,7 +295,6 @@ enum Config {
 // Water & Particle
 // #define PC_WATER
 #define WATER_CHEATS
-//#define PSP_WATERCANNON
 
 //#define USE_CUTSCENE_SHADOW_FOR_PED
 #define DISABLE_CUTSCENE_SHADOWS
@@ -340,7 +337,7 @@ enum Config {
 
 #	ifdef CUSTOM_FRONTEND_OPTIONS
 #		define GRAPHICS_MENU_OPTIONS // otherwise Display settings will be scrollable
-//#		define NO_ISLAND_LOADING  // disable loadscreen between islands via loading all island data at once, consumes more memory and CPU
+#		define NO_ISLAND_LOADING  // disable loadscreen between islands via loading all island data at once, consumes more memory and CPU
 #		define CUTSCENE_BORDERS_SWITCH
 #		define MULTISAMPLING		// adds MSAA option
 #		define INVERT_LOOK_FOR_PAD // enable the hidden option
@@ -362,7 +359,7 @@ static_assert(false, "SUPPORT_XBOX_SCRIPT and SUPPORT_MOBILE_SCRIPT are mutually
 #endif
 //#define SIMPLIER_MISSIONS // apply simplifications from mobile
 #define USE_ADVANCED_SCRIPT_DEBUG_OUTPUT
-#define SCRIPT_LOG_FILE_LEVEL 1 // 0 == no log, 1 == overwrite every frame, 2 == full log
+#define SCRIPT_LOG_FILE_LEVEL 0 // 0 == no log, 1 == overwrite every frame, 2 == full log
 
 #if SCRIPT_LOG_FILE_LEVEL == 0
 #undef USE_ADVANCED_SCRIPT_DEBUG_OUTPUT
@@ -399,7 +396,7 @@ static_assert(false, "SUPPORT_XBOX_SCRIPT and SUPPORT_MOBILE_SCRIPT are mutually
 // Audio
 #define RADIO_SCROLL_TO_PREV_STATION // Won't work without FIX_BUGS
 #define AUDIO_CACHE // cache sound lengths to speed up the cold boot
-#define PS2_AUDIO_PATHS // changes audio paths for cutscenes and radio to PS2 paths (needs vbdec on MSS builds)
+//#define PS2_AUDIO_PATHS // changes audio paths for cutscenes and radio to PS2 paths (needs vbdec on MSS builds)
 //#define AUDIO_OAL_USE_SNDFILE // use libsndfile to decode WAVs instead of our internal decoder
 #define AUDIO_OAL_USE_MPG123 // use mpg123 to support mp3 files
 

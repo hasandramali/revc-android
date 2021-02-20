@@ -76,14 +76,14 @@ CShadows::Init(void)
 	gpShadowBikeTex       = RwTextureRead("shad_bike",    nil);
 	gpShadowBaronTex      = RwTextureRead("shad_rcbaron", nil);
 	gpShadowExplosionTex  = RwTextureRead("shad_exp",     nil);
-	gpShadowHeadLightsTex = RwTextureRead("headlight_single",    nil);
+	gpShadowHeadLightsTex = RwTextureRead("headlight",    nil);
 	gpOutline1Tex         = RwTextureRead("outline_64",   nil);
 	gpOutline2Tex         = RwTextureRead("outline2_64",  nil);
 	gpOutline3Tex         = RwTextureRead("outline3_64",  nil);
 	gpBloodPoolTex        = RwTextureRead("bloodpool_64", nil);
-	//gpReflectionTex       = RwTextureRead("reflection01", nil);
+	gpReflectionTex       = RwTextureRead("reflection01", nil);
 	gpWalkDontTex         = RwTextureRead("walk_dont",    nil);
-	//gpCrackedGlassTex     = RwTextureRead("wincrack_32",  nil);
+	gpCrackedGlassTex     = RwTextureRead("wincrack_32",  nil);
 	gpPostShadowTex       = RwTextureRead("lamp_shad_64", nil);
 
 	CTxdStore::PopCurrentTxd();
@@ -99,9 +99,9 @@ CShadows::Init(void)
 	ASSERT(gpOutline2Tex != nil);
 	ASSERT(gpOutline3Tex != nil);
 	ASSERT(gpBloodPoolTex != nil);
-	//ASSERT(gpReflectionTex != nil);
+	ASSERT(gpReflectionTex != nil);
 	ASSERT(gpWalkDontTex != nil);
-	//ASSERT(gpCrackedGlassTex != nil);
+	ASSERT(gpCrackedGlassTex != nil);
 	ASSERT(gpPostShadowTex != nil);
 
 
@@ -178,9 +178,9 @@ CShadows::Shutdown(void)
 	ASSERT(gpOutline2Tex != nil);
 	ASSERT(gpOutline3Tex != nil);
 	ASSERT(gpBloodPoolTex != nil);
-	//ASSERT(gpReflectionTex != nil);
+	ASSERT(gpReflectionTex != nil);
 	ASSERT(gpWalkDontTex != nil);
-	//ASSERT(gpCrackedGlassTex != nil);
+	ASSERT(gpCrackedGlassTex != nil);
 	ASSERT(gpPostShadowTex != nil);
 
 	RwTextureDestroy(gpShadowCarTex);
@@ -194,9 +194,9 @@ CShadows::Shutdown(void)
 	RwTextureDestroy(gpOutline2Tex);
 	RwTextureDestroy(gpOutline3Tex);
 	RwTextureDestroy(gpBloodPoolTex);
-	//RwTextureDestroy(gpReflectionTex);
+	RwTextureDestroy(gpReflectionTex);
 	RwTextureDestroy(gpWalkDontTex);
-	//RwTextureDestroy(gpCrackedGlassTex);
+	RwTextureDestroy(gpCrackedGlassTex);
 	RwTextureDestroy(gpPostShadowTex);
 }
 
@@ -1068,6 +1068,8 @@ CShadows::SetRenderModeForShadowType(uint8 ShadowType)
 void
 CShadows::RenderStoredShadows(void)
 {
+	PUSH_RENDERGROUP("CShadows::RenderStoredShadows");
+
 	RenderBuffer::ClearRenderBuffer();
 
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE,      (void *)FALSE);
@@ -1241,12 +1243,16 @@ CShadows::RenderStoredShadows(void)
 	RwRenderStateSet(rwRENDERSTATETEXTUREADDRESS,    (void *)rwTEXTUREADDRESSWRAP);
 
 	ShadowsStoredToBeRendered = 0;
+
+	POP_RENDERGROUP();
 }
 
 
 void
 CShadows::RenderStaticShadows(void)
 {
+	PUSH_RENDERGROUP("CShadows::RenderStaticShadows");
+
 	RenderBuffer::ClearRenderBuffer();
 
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE,      (void *)FALSE);
@@ -1313,6 +1319,8 @@ CShadows::RenderStaticShadows(void)
 
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void *)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE,      (void *)TRUE);
+
+	POP_RENDERGROUP();
 }
 
 

@@ -466,7 +466,7 @@ public:
 	void ProcessScriptObject(int32 id);                                      // done
 	void ProcessSpecial();                                                   // done
 #ifdef GTA_TRAIN
-	bool ProcessTrainNoise(cVehicleParams &params); //done(bcs not exists in VC)
+	bool ProcessTrainNoise(cVehicleParams *params); //done(bcs not exists in VC)
 #endif
 	void ProcessVehicle(CVehicle *vehicle);                    // done
 	bool ProcessVehicleDoors(cVehicleParams &params);          // done
@@ -544,8 +544,8 @@ public:
 #endif
 };
 
-//#ifdef AUDIO_MSS
-//static_assert(sizeof(cAudioManager) == 0x5558, "cAudioManager: error");
-//#endif
+#ifdef AUDIO_MSS
+static_assert(sizeof(cAudioManager) == 0x5558, "cAudioManager: error");
+#endif
 
 extern cAudioManager AudioManager;

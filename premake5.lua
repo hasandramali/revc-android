@@ -56,20 +56,13 @@ function getarch(a)
 	return a
 end
 
-workspace "reLCS"
+workspace "reVC"
 	language "C++"
 	configurations { "Debug", "Release", "Vanilla" }
-	startproject "reLCS"
+	startproject "reVC"
 	location "build"
 	symbols "Full"
 	staticruntime "off"
-
-	-- for CVECTORHACK
-	configuration { "gmake*" }
-		buildoptions { "-fpermissive" }
-
-	filter { "platforms:macosx*" }
-		buildoptions { "-Wno-address-of-temporary" }
 
 	if _OPTIONS["with-asan"] then
 		buildoptions { "-fsanitize=address -g3 -fno-omit-frame-pointer" }
@@ -228,9 +221,9 @@ local function addSrcFiles( prefix )
 	return prefix .. "/*cpp", prefix .. "/*.h", prefix .. "/*.c", prefix .. "/*.ico", prefix .. "/*.rc"
 end
 
-project "reLCS"
+project "reVC"
 	kind "WindowedApp"
-	targetname "reLCS"
+	targetname "reVC"
 	targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
 
 	if(_OPTIONS["with-librw"]) then
@@ -247,8 +240,6 @@ project "reLCS"
 	files { addSrcFiles("src/control") }
 	files { addSrcFiles("src/core") }
 	files { addSrcFiles("src/entities") }
-	files { addSrcFiles("src/leeds") }
-	files { addSrcFiles("src/leeds/base") }
 	files { addSrcFiles("src/math") }
 	files { addSrcFiles("src/modelinfo") }
 	files { addSrcFiles("src/objects") }
@@ -274,8 +265,6 @@ project "reLCS"
 	includedirs { "src/control" }
 	includedirs { "src/core" }
 	includedirs { "src/entities" }
-	includedirs { "src/leeds" }
-	includedirs { "src/leeds/base" }
 	includedirs { "src/math" }
 	includedirs { "src/modelinfo" }
 	includedirs { "src/objects" }
@@ -314,8 +303,8 @@ project "reLCS"
 		defines { "AUDIO_OAL" }
 
 	filter {}
-	if(os.getenv("GTA_LCS_RE_DIR")) then
-		setpaths(os.getenv("GTA_LCS_RE_DIR") .. "/", "%(cfg.buildtarget.name)")
+	if(os.getenv("GTA_VC_RE_DIR")) then
+		setpaths(os.getenv("GTA_VC_RE_DIR") .. "/", "%(cfg.buildtarget.name)")
 	end
 	
 	filter "platforms:win*"
@@ -353,10 +342,10 @@ project "reLCS"
 		libdirs { "vendor/openal-soft/libs/Win64" }
 
 	filter "platforms:linux*oal"
-		links { "openal", "mpg123", "sndfile", "pthread" }
+		links { "openal", "mpg123", "sndfile", "pthread", "X11" }
 		
 	filter "platforms:bsd*oal"
-		links { "openal", "mpg123", "sndfile", "pthread" }
+		links { "openal", "mpg123", "sndfile", "pthread", "X11" }
 
 	filter "platforms:macosx*oal"
 		links { "openal", "mpg123", "sndfile", "pthread" }

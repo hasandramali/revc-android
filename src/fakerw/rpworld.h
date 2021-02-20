@@ -13,7 +13,6 @@
 
 //struct RpMaterial;
 typedef rw::Material RpMaterial;
-typedef rw::MaterialList RpMaterialList;
 
 typedef RpMaterial *(*RpMaterialCallBack)(RpMaterial *material, void *data);
 

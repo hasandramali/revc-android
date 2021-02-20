@@ -38,8 +38,6 @@ public:
 	CColModel *m_hitColModel;
 	int8 radio1, radio2;
 
-	static base::cRelocatableChunkClassInfo msClassInfo;
-	static CPedModelInfo msClassInstance;
 	static RwObjectNameIdAssocation m_pPedIds[PED_NODE_MAX];
 
 	CPedModelInfo(void) : CClumpModelInfo(MITYPE_PED) { m_hitColModel = nil; }
@@ -47,13 +45,7 @@ public:
 	void DeleteRwObject(void);
 	void SetClump(RpClump *);
 
-	virtual void LoadModel(void *model, const void *chunk);
-	virtual void Write(base::cRelocatableChunkWriter &writer);
-	virtual void *WriteModel(base::cRelocatableChunkWriter &writer);
-	virtual void RcWriteThis(base::cRelocatableChunkWriter &writer);
-	virtual void RcWriteEmpty(base::cRelocatableChunkWriter &writer);
-
-	bool CreateHitColModelSkinned(RpClump *clump);
+	void CreateHitColModelSkinned(RpClump *clump);
 	CColModel *GetHitColModel(void) { return m_hitColModel; }
 	CColModel *AnimatePedColModelSkinned(RpClump *clump);
 	CColModel *AnimatePedColModelSkinnedWorld(RpClump *clump);

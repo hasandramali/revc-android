@@ -3,10 +3,8 @@
 enum eLevelName {
 	LEVEL_IGNORE = -1, // beware, this is only used in CPhysical's m_nZoneLevel
 	LEVEL_GENERIC = 0,
-	LEVEL_INDUSTRIAL,
-	LEVEL_COMMERCIAL,
-	LEVEL_SUBURBAN,
-	LEVEL_UNDERGROUND,
+	LEVEL_BEACH,
+	LEVEL_MAINLAND,
 
 	NUM_LEVELS
 };
@@ -80,4 +78,4 @@ public:
 	static void ProcessTidyUpMemory(void);
 };
 
-inline bool IsAreaVisible(int area) { return true; }
+inline bool IsAreaVisible(int area) { return area == CGame::currArea || area == AREA_EVERYWHERE; }

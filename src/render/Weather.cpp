@@ -49,11 +49,6 @@ float CWeather::WindClipped;
 float CWeather::TrafficLightBrightness;
 
 bool CWeather::bScriptsForceRain;
-bool CWeather::Stored_StateStored;
-float CWeather::Stored_InterpolationValue;
-int16 CWeather::Stored_OldWeatherType;
-int16 CWeather::Stored_NewWeatherType;
-float CWeather::Stored_Rain;
 
 tRainStreak Streaks[NUM_RAIN_STREAKS];
 
@@ -328,7 +323,6 @@ void CWeather::Update(void)
 
 void CWeather::AddHeatHaze()
 {
-	/*
 	if(TheCamera.Cams[TheCamera.ActiveCam].Mode == CCam::MODE_TOPDOWN ||
 	   TheCamera.Cams[TheCamera.ActiveCam].Mode == CCam::MODE_TOP_DOWN_PED)
 		return;
@@ -340,7 +334,6 @@ void CWeather::AddHeatHaze()
 		pos.y = CGeneral::GetRandomNumberInRange(SCREEN_HEIGHT*0.4f, SCREEN_HEIGHT*0.9f);
 	pos.z = 100.0f;
 	CParticle::AddParticle(PARTICLE_HEATHAZE_IN_DIST, pos, CVector(0.0f, 0.0f, 0.0f));
-	*/
 }
 
 void CWeather::AddBeastie()
@@ -651,26 +644,6 @@ void CWeather::RenderRainStreaks(void)
 	}
 	TempBufferVerticesStored = 0;
 	TempBufferIndicesStored = 0;
-}
-
-void CWeather::StoreWeatherState()
-{
-	Stored_StateStored = true;
-	Stored_InterpolationValue = InterpolationValue;
-	Stored_Rain = Rain;
-	Stored_NewWeatherType = NewWeatherType;
-	Stored_OldWeatherType = OldWeatherType;
-}
-
-void CWeather::RestoreWeatherState()
-{
-#ifdef FIX_BUGS // it's not used anyway though
-	Stored_StateStored = false;
-#endif
-	InterpolationValue = Stored_InterpolationValue;
-	Rain = Stored_Rain;
-	NewWeatherType = Stored_NewWeatherType;
-	OldWeatherType = Stored_OldWeatherType;
 }
 
 #ifdef SECUROM

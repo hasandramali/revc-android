@@ -233,7 +233,9 @@ CVisibilityPlugins::RenderFadingEntities(CLinkList<AlphaObjectInfo> &list)
 			DeActivateDirectional();
 			SetAmbientColours();
 			e->bImBeingRendered = true;
+			PUSH_RENDERGROUP(mi->GetModelName());
 			RenderFadingAtomic((RpAtomic*)e->m_rwObject, node->item.sort);
+			POP_RENDERGROUP();
 			e->bImBeingRendered = false;
 		}else
 			CRenderer::RenderOneNonRoad(e);
@@ -265,7 +267,6 @@ CVisibilityPlugins::RenderWheelAtomicCB(RpAtomic *atomic)
 
 	mi = GetAtomicModelInfo(atomic);
 	len = Sqrt(DistToCameraSq);
-	len *= 0.5f;	// HACK HACK, LOD wheels look shite
 	lodatm = mi->GetAtomicFromDistance(len * TheCamera.LODDistMultiplier / VEHICLE_LODDIST_MULTIPLIER);
 	if(lodatm){
 		if(RpAtomicGetGeometry(lodatm) != RpAtomicGetGeometry(atomic))
@@ -465,14 +466,6 @@ CVisibilityPlugins::RenderVehicleHiDetailCB_Boat(RpAtomic *atomic)
 }
 
 RpAtomic*
-CVisibilityPlugins::RenderVehicleHiDetailCB_Boat_Far(RpAtomic *atomic)
-{
-	if(DistToCameraSq < ms_bigVehicleLod1Dist)
-		RENDERCALLBACK(atomic);
-	return atomic;
-}
-
-RpAtomic*
 CVisibilityPlugins::RenderVehicleHiDetailAlphaCB_Boat(RpAtomic *atomic)
 {
 	if(DistToCameraSq < ms_vehicleLod0Dist){
@@ -493,23 +486,6 @@ CVisibilityPlugins::RenderVehicleLoDetailCB_Boat(RpAtomic *atomic)
 
 	clump = RpAtomicGetClump(atomic);
 	if(DistToCameraSq >= ms_vehicleLod0Dist){
-		alpha = GetClumpAlpha(clump);
-		if(alpha == 255)
-			RENDERCALLBACK(atomic);
-		else
-			RenderAlphaAtomic(atomic, alpha);
-	}
-	return atomic;
-}
-
-RpAtomic*
-CVisibilityPlugins::RenderVehicleLoDetailCB_Boat_Far(RpAtomic *atomic)
-{
-	RpClump *clump;
-	int32 alpha;
-
-	clump = RpAtomicGetClump(atomic);
-	if(DistToCameraSq >= ms_bigVehicleLod1Dist){
 		alpha = GetClumpAlpha(clump);
 		if(alpha == 255)
 			RENDERCALLBACK(atomic);
@@ -677,9 +653,8 @@ CVisibilityPlugins::RenderVehicleTailRotorAlphaCB(RpAtomic *atomic)
 RpAtomic*
 CVisibilityPlugins::RenderPlayerCB(RpAtomic *atomic)
 {
-// LCS: removed
-//	if(CWorld::Players[0].m_pSkinTexture)
-//		RpGeometryForAllMaterials(RpAtomicGetGeometry(atomic), SetTextureCB, CWorld::Players[0].m_pSkinTexture);
+	if(CWorld::Players[0].m_pSkinTexture)
+		RpGeometryForAllMaterials(RpAtomicGetGeometry(atomic), SetTextureCB, CWorld::Players[0].m_pSkinTexture);
 	RENDERCALLBACK(atomic);
 	return atomic;
 }
