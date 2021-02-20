@@ -4,6 +4,7 @@
 #include "Pad.h"
 #include "Clock.h"
 #include "Stats.h"
+#include "VarConsole.h"
 
 _TODO("gbFastTime");
 bool gbFastTime;
@@ -17,6 +18,11 @@ uint16 CClock::ms_Stored_nGameClockSeconds;
 uint32 CClock::ms_nMillisecondsPerGameMinute;
 uint32  CClock::ms_nLastClockTick;
 bool   CClock::ms_bClockHasBeenStored;
+float  CClock::ms_EnvMapTimeMultiplicator;
+
+#ifndef MASTER
+bool gbFreezeTime;
+#endif
 
 void
 CClock::Initialise(uint32 scale)
@@ -28,7 +34,12 @@ CClock::Initialise(uint32 scale)
 	ms_nMillisecondsPerGameMinute = scale;
 	ms_nLastClockTick = CTimer::GetTimeInMilliseconds();
 	ms_bClockHasBeenStored = false;
+	ms_EnvMapTimeMultiplicator = 1.0f;
 	debug("CClock ready\n");
+#ifndef MASTER
+	VarConsole.Add("Time (hour of day)", &ms_nGameClockHours, 1, 0, 23, true);
+	VarConsole.Add("Freeze time", &gbFreezeTime, true);
+#endif
 }
 
 void
@@ -48,6 +59,10 @@ CClock::Update(void)
 		}
 		
 	}
+#ifndef MASTER
+	else if (gbFreezeTime)
+		ms_nLastClockTick = CTimer::GetTimeInMilliseconds();
+#endif
 	else if(CTimer::GetTimeInMilliseconds() - ms_nLastClockTick > ms_nMillisecondsPerGameMinute || gbFastTime)
 	{
 		ms_nGameClockMinutes++;
@@ -73,8 +88,14 @@ CClock::Update(void)
 void
 CClock::SetGameClock(uint8 h, uint8 m)
 {
-	ms_nGameClockHours = h;
+	while (m >= 60) {
+		m -= 60;
+		h++;
+	}
 	ms_nGameClockMinutes = m;
+	while (h >= 24)
+		h -= 24;
+	ms_nGameClockHours = h;
 	ms_nGameClockSeconds = 0;
 	ms_nLastClockTick = CTimer::GetTimeInMilliseconds();
 }
@@ -114,4 +135,11 @@ CClock::RestoreClock(void)
 	ms_nGameClockHours = ms_Stored_nGameClockHours;
 	ms_nGameClockMinutes = ms_Stored_nGameClockMinutes;
 	ms_nGameClockSeconds = ms_Stored_nGameClockSeconds;
+}
+
+void
+CClock::CalcEnvMapTimeMultiplicator(void)
+{
+	float nightness = Abs(ms_nGameClockHours/24.0f - 0.5f);
+	ms_EnvMapTimeMultiplicator = SQR(1.0f - nightness);;
 }

@@ -10,7 +10,7 @@ enum eAspectRatio
 	AR_16_10,
 	AR_16_9,
 	AR_21_9,
-	
+
 	AR_MAX,
 };
 
@@ -20,10 +20,10 @@ private:
 	static float ms_fNearClipZ;
 	static float ms_fFarClipZ;
 	static float ms_fFOV;
-#ifdef ASPECT_RATIO_SCALE
 	// we use this variable to scale a lot of 2D elements
 	// so better cache it
 	static float ms_fAspectRatio;
+#ifdef ASPECT_RATIO_SCALE
 	// similar thing for 3D rendering
 	static float ms_fScaledFOV;
 #endif
@@ -58,15 +58,12 @@ public:
 	static float GetScaledFOV(void) { return ms_fFOV; }
 #endif
 
-	static float FindAspectRatio(void);
+	static float CalculateAspectRatio(void);
 #ifdef ASPECT_RATIO_SCALE
 	static float ConvertFOV(float fov);
+#endif
 	static float GetAspectRatio(void) { return ms_fAspectRatio; }
 	static void SetAspectRatio(float ratio) { ms_fAspectRatio = ratio; }
-#else
-	static float GetAspectRatio(void) { return FindAspectRatio(); }
-#endif
-	
 #ifdef PROPER_SCALING	
 	static float ScaleY(float y);
 #endif 

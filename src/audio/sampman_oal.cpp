@@ -118,6 +118,7 @@ char _mp3DirectoryPath[MAX_PATH];
 CStream    *aStream[MAX_STREAMS];
 uint8      nStreamPan   [MAX_STREAMS];
 uint8      nStreamVolume[MAX_STREAMS];
+uint8      nStreamLoopedFlag[MAX_STREAMS];
 uint32 _CurMP3Index;
 int32 _CurMP3Pos;
 bool _bIsMp3Active;
@@ -321,7 +322,7 @@ set_new_provider(int index)
 		alGenSources(MAX_STREAMS*2, ALStreamSources[0]);
 		for ( int32 i = 0; i < MAX_STREAMS; i++ )
 		{
-			alGenBuffers(NUM_STREAMBUFFERS, ALStreamBuffers[i]); 
+			alGenBuffers(NUM_STREAMBUFFERS, ALStreamBuffers[i]);
 			alSourcei(ALStreamSources[i][0], AL_SOURCE_RELATIVE, AL_TRUE);
 			alSource3f(ALStreamSources[i][0], AL_POSITION, 0.0f, 0.0f, 0.0f);
 			alSourcef(ALStreamSources[i][0], AL_GAIN, 1.0f);
@@ -391,7 +392,7 @@ set_new_provider(int index)
 static bool
 IsThisTrackAt16KHz(uint32 track)
 {
-	return track == STREAMED_SOUND_RADIO_CHAT;
+	return false;// track == STREAMED_SOUND_RADIO_KCHAT || track == STREAMED_SOUND_RADIO_VCPR || track == STREAMED_SOUND_RADIO_POLICE;
 }
 
 cSampleManager::cSampleManager(void)
@@ -454,6 +455,31 @@ int8 cSampleManager::SetCurrent3DProvider(uint8 nProvider)
 		return curprovider;
 	else
 		return curprovider;
+}
+
+int8
+cSampleManager::AutoDetect3DProviders()
+{
+	if (!AudioManager.IsAudioInitialised())
+		return -1;
+
+	if (defaultProvider >= 0 && defaultProvider < m_nNumberOfProviders) {
+		if (set_new_provider(defaultProvider))
+			return defaultProvider;
+	}
+
+	for (uint32 i = 0; i < GetNum3DProvidersAvailable(); i++)
+	{
+		char* providername = Get3DProviderName(i);
+
+		if (!strcasecmp(providername, "OPENAL SOFT")) {
+			SetCurrent3DProvider(i);
+			if (GetCurrent3DProviderIndex() == i)
+				return i;
+		}
+	}
+
+	return -1;
 }
 
 static bool
@@ -730,6 +756,8 @@ _FindMP3s(void)
 					delete aStream[0];
 					aStream[0] = NULL;
 
+					OutputDebugString(fd.cFileName);
+					
 					pList->pNext = new tMP3Entry;
 					
 					tMP3Entry *e = pList->pNext;
@@ -972,16 +1000,19 @@ cSampleManager::Initialise(void)
 		debug("Cannot load audio cache\n");
 #endif
 
-		for(int32 i = 0; i < TOTAL_STREAMED_SOUNDS; i++) {
+		for ( int32 i = 0; i < TOTAL_STREAMED_SOUNDS; i++ )
+		{	
 			aStream[0] = new CStream(StreamedNameTable[i], ALStreamSources[0], ALStreamBuffers[0], IsThisTrackAt16KHz(i) ? 16000 : 32000);
-
-			if(aStream[0] && aStream[0]->IsOpened()) {
+			
+			if ( aStream[0] && aStream[0]->IsOpened() )
+			{
 				uint32 tatalms = aStream[0]->GetLengthMS();
 				delete aStream[0];
 				aStream[0] = NULL;
-
+				
 				nStreamLength[i] = tatalms;
-			} else
+			}
+			else
 				USERERROR("Can't open '%s'\n", StreamedNameTable[i]);
 		}
 #ifdef AUDIO_CACHE
@@ -1178,6 +1209,12 @@ cSampleManager::SetMusicMasterVolume(uint8 nVolume)
 }
 
 void
+cSampleManager::SetMP3BoostVolume(uint8 nVolume)
+{
+	m_nMP3BoostVolume = nVolume;
+}
+
+void
 cSampleManager::SetEffectsFadeVolume(uint8 nVolume)
 {
 	m_nEffectsFadeVolume = nVolume;
@@ -1313,14 +1350,6 @@ cSampleManager::LoadPedComment(uint32 nComment)
 
 				break;
 			}
-			
-			case MUSICMODE_FRONTEND:
-			{
-				if ( MusicManager.GetNextTrack() == STREAMED_SOUND_GAME_COMPLETED )
-					return false;
-
-				break;
-			}
 		}
 	}
 
@@ -1329,7 +1358,7 @@ cSampleManager::LoadPedComment(uint32 nComment)
 	int samplesSize = m_aSamples[nComment].nSize / 2;
 	op_pcm_seek(fpSampleDataHandle, m_aSamples[nComment].nOffset / 2);
 	while (samplesSize > 0) {
-		int size = op_read(fpSampleDataHandle, (opus_int16 *)(nSampleBankMemoryStartAddress[SFX_BANK_PED_COMMENTS] + PED_BLOCKSIZE * nCurrentPedSlot + samplesRead),
+		int size = op_read(fpSampleDataHandle, (opus_int16 *)(nSampleBankMemoryStartAddress[SAMPLEBANK_PED] + PED_BLOCKSIZE * nCurrentPedSlot + samplesRead),
 		                   samplesSize, NULL);
 		if (size <= 0) {
 			return false;
@@ -1400,24 +1429,24 @@ bool cSampleManager::UpdateReverb(void)
 
 	if ( AudioManager.GetFrameCounter() & 15 )
 		return false;
-			
-	float y = AudioManager.GetReflectionsDistance(REFLECTION_TOP)  + AudioManager.GetReflectionsDistance(REFLECTION_BOTTOM);
-	float x = AudioManager.GetReflectionsDistance(REFLECTION_LEFT) + AudioManager.GetReflectionsDistance(REFLECTION_RIGHT);
-	float z = AudioManager.GetReflectionsDistance(REFLECTION_UP);
+
+	float fRatio = 0.0f;
+
+#define MIN_DIST 0.5f
+#define CALCULATE_RATIO(value, maxDist, maxRatio) (value > MIN_DIST && value < maxDist ? value / maxDist * maxRatio : 0)
+
+	fRatio += CALCULATE_RATIO(AudioManager.GetReflectionsDistance(REFLECTION_CEIL_NORTH), 10.0f, 1/2.f);
+	fRatio += CALCULATE_RATIO(AudioManager.GetReflectionsDistance(REFLECTION_CEIL_SOUTH), 10.0f, 1/2.f);
+	fRatio += CALCULATE_RATIO(AudioManager.GetReflectionsDistance(REFLECTION_CEIL_WEST), 10.0f, 1/2.f);
+	fRatio += CALCULATE_RATIO(AudioManager.GetReflectionsDistance(REFLECTION_CEIL_EAST), 10.0f, 1/2.f);
+
+	fRatio += CALCULATE_RATIO((AudioManager.GetReflectionsDistance(REFLECTION_NORTH) + AudioManager.GetReflectionsDistance(REFLECTION_SOUTH)) / 2.f, 4.0f, 1/3.f);
+	fRatio += CALCULATE_RATIO((AudioManager.GetReflectionsDistance(REFLECTION_WEST) + AudioManager.GetReflectionsDistance(REFLECTION_EAST)) / 2.f, 4.0f, 1/3.f);
+
+#undef CALCULATE_RATIO
+#undef MIN_DIST
 	
-	float normy = norm(y, 5.0f, 40.0f);
-	float normx = norm(x, 5.0f, 40.0f);
-	float normz = norm(z, 5.0f, 40.0f);
-	
-	#define ZR(v, a, b) (((v)==0)?(a):(b))
-	#define CALCRATIO(x,y,z,min,max,val) (ZR(y, ZR(x, ZR(z, min, max), min), ZR(x, ZR(z, min, max), ZR(z, min, val))))
-	
-	float fRatio = CALCRATIO(normx, normy, normz, 0.3f, 0.5f, (normy+normx+normz)/3.0f);
-	
-	#undef CALCRATIO
-	#undef ZE
-	
-	fRatio = clamp(fRatio, usingEAX3==1 ? 0.0f : 0.30f, 1.0f);
+	fRatio = clamp(fRatio, 0.0f, 0.6f);
 	
 	if ( fRatio == _fPrevEaxRatioDestination )
 		return false;
@@ -1428,6 +1457,7 @@ bool cSampleManager::UpdateReverb(void)
 	if ( usingEAX3 )
 #endif
 	{
+		fRatio = Min(fRatio * 1.67f, 1.0f);
 		if ( EAX3ListenerInterpolate(&StartEAX3, &FinishEAX3, fRatio, &EAX3Params, false) )
 		{
 			EAX_SetAll(&EAX3Params);
@@ -1442,16 +1472,17 @@ bool cSampleManager::UpdateReverb(void)
 			}
 			*/
 			
-			_fEffectsLevel = 1.0f - fRatio * 0.5f;
+			_fEffectsLevel = fRatio * 0.75f;
 		}
 	}
 	else
 	{
 		if ( _usingEFX )
-			_fEffectsLevel = (1.0f - fRatio) * 0.4f;
+			_fEffectsLevel = fRatio * 0.8f;
 		else
-			_fEffectsLevel = (1.0f - fRatio) * 0.7f;
+			_fEffectsLevel = fRatio * 0.22f;
 	}
+	_fEffectsLevel = Min(_fEffectsLevel, 1.0f);
 
 	_fPrevEaxRatioDestination = fRatio;
 	
@@ -1529,12 +1560,11 @@ cSampleManager::SetChannelEmittingVolume(uint32 nChannel, uint32 nVolume)
 	
 	nChannelVolume[nChannel] = vol;
 	
-	// reduce channel volume when JB.MP3 or S4_BDBD.MP3 playing
-	if (   MusicManager.GetMusicMode()    == MUSICMODE_CUTSCENE
-		&& MusicManager.GetNextTrack() != STREAMED_SOUND_NEWS_INTRO
-		&& MusicManager.GetNextTrack() != STREAMED_SOUND_CUTSCENE_SAL4_BDBD )
-	{
-		nChannelVolume[nChannel] = vol / 4;
+	if (MusicManager.GetMusicMode() == MUSICMODE_CUTSCENE ) {
+		if (MusicManager.GetCurrentTrack() == STREAMED_SOUND_CUTSCENE_FINALE)
+			nChannelVolume[nChannel] = 0;
+		else
+			nChannelVolume[nChannel] >>= 2;
 	}
 
 	// no idea, does this one looks like a bug or it's SetChannelVolume ?
@@ -1571,14 +1601,14 @@ cSampleManager::SetChannelVolume(uint32 nChannel, uint32 nVolume)
 		
 		nChannelVolume[nChannel] = vol;
 		
-		// reduce the volume for JB.MP3 and S4_BDBD.MP3
-		if (   MusicManager.GetMusicMode()    == MUSICMODE_CUTSCENE
-			&& MusicManager.GetNextTrack() != STREAMED_SOUND_NEWS_INTRO
-			&& MusicManager.GetNextTrack() != STREAMED_SOUND_CUTSCENE_SAL4_BDBD )
-		{
-			nChannelVolume[nChannel] = vol / 4;
+		// increase the volume for JB.MP3 and S4_BDBD.MP3
+		if (MusicManager.GetMusicMode() == MUSICMODE_CUTSCENE ) {
+			if (MusicManager.GetCurrentTrack() == STREAMED_SOUND_CUTSCENE_FINALE)
+				nChannelVolume[nChannel] = 0;
+			else
+				nChannelVolume[nChannel] >>= 2;
 		}
-			
+
 		aChannel[nChannel].SetVolume(m_nEffectsFadeVolume*vol*m_nEffectsVolume >> 14);
 	}
 }
@@ -1644,7 +1674,7 @@ cSampleManager::StopChannel(uint32 nChannel)
 }
 
 void
-cSampleManager::PreloadStreamedFile(uint8 nFile, uint8 nStream)
+cSampleManager::PreloadStreamedFile(uint32 nFile, uint8 nStream)
 {
 	char filename[MAX_PATH];
 	
@@ -1702,97 +1732,101 @@ cSampleManager::StartPreloadedStreamedFile(uint8 nStream)
 }
 
 bool
-cSampleManager::StartStreamedFile(uint8 nFile, uint32 nPos, uint8 nStream)
+cSampleManager::StartStreamedFile(uint32 nFile, uint32 nPos, uint8 nStream)
 {
-	int i = 0;
 	uint32 position = nPos;
-	char filename[MAX_PATH];
-
-	if ( nFile >= TOTAL_STREAMED_SOUNDS )
-		return false;
-
-	if ( aStream[nStream] )
+	char filename[256];
+	
+	ASSERT( nStream < MAX_STREAMS );
+	
+	if ( nFile < TOTAL_STREAMED_SOUNDS )
 	{
-		delete aStream[nStream];
-		aStream[nStream] = NULL;
-	}
-	if ( nFile == STREAMED_SOUND_RADIO_MP3_PLAYER )
-	{
-		do
+		if ( aStream[nStream] )
 		{
-			// Switched to MP3 player just now
-			if ( !_bIsMp3Active && i == 0 )
-			{
-				if ( nPos > nStreamLength[STREAMED_SOUND_RADIO_MP3_PLAYER] )
-					position = 0;
-				tMP3Entry *e = _pMP3List;
+			delete aStream[nStream];
+			aStream[nStream] = NULL;
+		}
+		
+		if ( nFile == STREAMED_SOUND_RADIO_MP3_PLAYER )
+		{
+			uint32 i = 0;
+			do {
+				if(i != 0 || _bIsMp3Active) {
+					if(++_CurMP3Index >= nNumMP3s) _CurMP3Index = 0;
 
-				// Try to continue from previous song, if already started
-				if(!_GetMP3PosFromStreamPos(&position, &e) && !e) {
-					nFile = 0;
-					strcpy(filename, StreamedNameTable[nFile]);
-					
-					CStream* stream = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
+					_CurMP3Pos = 0;
 
-					aStream[nStream] = stream;
+					tMP3Entry *mp3 = _GetMP3EntryByIndex(_CurMP3Index);
 
-					if (stream->Setup()) {
-						if (position != 0)
-							stream->SetPosMS(position);
+					if(mp3) {
+						mp3 = _pMP3List;
+						if(mp3 == NULL) {
+							_bIsMp3Active = false;
+							nFile = 0;
+							strcat(filename, StreamedNameTable[nFile]);
 
-						stream->Start();
+							CStream* stream = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
+							ASSERT(stream != NULL);
 
-						return true;
-					} else {
-						delete stream;
-						aStream[nStream] = NULL;
+							aStream[nStream] = stream;
+
+							if (stream->Setup()) {
+								stream->SetLoopCount(nStreamLoopedFlag[nStream] ? 0 : 1);
+								nStreamLoopedFlag[nStream] = true;
+								if (position != 0)
+									stream->SetPosMS(position);
+
+								stream->Start();
+
+								return true;
+							} else {
+								delete stream;
+								aStream[nStream] = NULL;
+							}
+
+							return false;
+						}
 					}
-					return false;
 
-				} else {
-					if ( e->pLinkPath != NULL )
-						aStream[nStream] = new CStream(e->pLinkPath, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
+					if (mp3->pLinkPath != NULL)
+						aStream[nStream] = new CStream(mp3->pLinkPath, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
 					else {
 						strcpy(filename, _mp3DirectoryPath);
-						strcat(filename, e->aFilename);
-					
-						aStream[nStream] = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream]);
-					}
-					
-					if (aStream[nStream]->Setup()) {
-						if (position != 0)
-							aStream[nStream]->SetPosMS(position);
+						strcat(filename, mp3->aFilename);
 
+						aStream[nStream] = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
+					}
+
+					if (aStream[nStream]->Setup()) {
 						aStream[nStream]->Start();
 
-						_bIsMp3Active = true;
 						return true;
 					} else {
 						delete aStream[nStream];
 						aStream[nStream] = NULL;
 					}
-					// fall through, start playing from another song
+
+					_bIsMp3Active = false;
+					continue;
 				}
-			} else {
-				if(++_CurMP3Index >= nNumMP3s) _CurMP3Index = 0;
-
-				_CurMP3Pos = 0;
-
-				tMP3Entry *mp3 = _GetMP3EntryByIndex(_CurMP3Index);
-				if ( !mp3 )
+				if ( nPos > nStreamLength[STREAMED_SOUND_RADIO_MP3_PLAYER] )
+					position = 0;
+				
+				tMP3Entry *e;
+				if ( !_GetMP3PosFromStreamPos(&position, &e) )
 				{
-					mp3 = _pMP3List;
-					if ( !_pMP3List )
+					if ( e == NULL )
 					{
 						nFile = 0;
-						_bIsMp3Active = 0;
-						strcpy(filename, StreamedNameTable[nFile]);
-
+						strcat(filename, StreamedNameTable[nFile]);
 						CStream* stream = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
+						ASSERT(stream != NULL);
 
 						aStream[nStream] = stream;
 
 						if (stream->Setup()) {
+							stream->SetLoopCount(nStreamLoopedFlag[nStream] ? 0 : 1);
+							nStreamLoopedFlag[nStream] = true;
 							if (position != 0)
 								stream->SetPosMS(position);
 
@@ -1803,53 +1837,63 @@ cSampleManager::StartStreamedFile(uint8 nFile, uint32 nPos, uint8 nStream)
 							delete stream;
 							aStream[nStream] = NULL;
 						}
+
 						return false;
 					}
 				}
-				if(mp3->pLinkPath != NULL)
-					aStream[nStream] = new CStream(mp3->pLinkPath, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
+
+				if (e->pLinkPath != NULL)
+					aStream[nStream] = new CStream(e->pLinkPath, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
 				else {
 					strcpy(filename, _mp3DirectoryPath);
-					strcat(filename, mp3->aFilename);
+					strcat(filename, e->aFilename);
 
 					aStream[nStream] = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream]);
 				}
 
 				if (aStream[nStream]->Setup()) {
+					if (position != 0)
+						aStream[nStream]->SetPosMS(position);
+
 					aStream[nStream]->Start();
-#ifdef FIX_BUGS
+
 					_bIsMp3Active = true;
-#endif
 					return true;
 				} else {
 					delete aStream[nStream];
 					aStream[nStream] = NULL;
 				}
+				
+				_bIsMp3Active = false;
 
-			}
-			_bIsMp3Active = 0;
+			} while(++i < nNumMP3s);
+
+			position = 0;
+			nFile = 0;
 		}
-		while ( ++i < nNumMP3s );
-		position = 0;
-		nFile = 0;
-	}
-	strcpy(filename, StreamedNameTable[nFile]);
-	
-	CStream *stream = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
 
-	aStream[nStream] = stream;
-	
-	if ( stream->Setup() ) {
-		if (position != 0)
-			stream->SetPosMS(position);	
-
-		stream->Start();
+		strcpy(filename, StreamedNameTable[nFile]);
 		
-		return true;
-	} else {
-		delete stream;
-		aStream[nStream] = NULL;
+		CStream *stream = new CStream(filename, ALStreamSources[nStream], ALStreamBuffers[nStream], IsThisTrackAt16KHz(nFile) ? 16000 : 32000);
+		ASSERT(stream != NULL);
+
+		aStream[nStream] = stream;
+		
+		if ( stream->Setup() ) {
+			stream->SetLoopCount(nStreamLoopedFlag[nStream] ? 0 : 1);
+			nStreamLoopedFlag[nStream] = true;
+			if (position != 0)
+				stream->SetPosMS(position);	
+
+			stream->Start();
+			
+			return true;
+		} else {
+			delete stream;
+			aStream[nStream] = NULL;
+		}
 	}
+	
 	return false;
 }
 
@@ -1904,11 +1948,16 @@ cSampleManager::SetStreamedVolumeAndPan(uint8 nVolume, uint8 nPan, uint8 nEffect
 {
 	ASSERT( nStream < MAX_STREAMS );
 	
+	float boostMult = 0.0f;
+
 	if ( nVolume > MAX_VOLUME )
 		nVolume = MAX_VOLUME;
 	
 	if ( nPan > MAX_VOLUME )
 		nPan = MAX_VOLUME;
+
+	if ( MusicManager.GetRadioInCar() == USERTRACK && !MusicManager.CheckForMusicInterruptions() )
+			boostMult = m_nMP3BoostVolume / 64.f;
 		
 	nStreamVolume[nStream] = nVolume;
 	nStreamPan   [nStream] = nPan;
@@ -1917,10 +1966,14 @@ cSampleManager::SetStreamedVolumeAndPan(uint8 nVolume, uint8 nPan, uint8 nEffect
 	
 	if ( stream )
 	{
-		if ( nEffectFlag )
-			stream->SetVolume(m_nEffectsFadeVolume*nVolume*m_nEffectsVolume >> 14);
+		if ( nEffectFlag ) {
+			if ( nStream == 1 || nStream == 2 )
+				stream->SetVolume(128*nVolume*m_nEffectsVolume >> 14);
+			else
+				stream->SetVolume(m_nEffectsFadeVolume*nVolume*m_nEffectsVolume >> 14);
+		}
 		else
-			stream->SetVolume(m_nMusicFadeVolume*nVolume*m_nMusicVolume >> 14);
+			stream->SetVolume((m_nMusicFadeVolume*nVolume*(uint32)(m_nMusicVolume * boostMult + m_nMusicVolume)) >> 14);
 		
 		stream->SetPan(nPan);
 	}
@@ -2017,4 +2070,11 @@ cSampleManager::InitialiseSampleBanks(void)
 
 	return true;
 }
+
+void
+cSampleManager::SetStreamedFileLoopFlag(uint8 nLoopFlag, uint8 nChannel)
+{
+	nStreamLoopedFlag[nChannel] = nLoopFlag;
+}
+
 #endif

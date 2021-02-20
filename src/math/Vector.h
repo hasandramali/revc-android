@@ -1,8 +1,12 @@
 #pragma once
 
+// TODO(LCS): this should have 16 byte alignment but VS doesn't like passing aligned values by value
+// need a solution for this eventually if we ever want to load original assets
 class CVector : public RwV3d
 {
 public:
+	float w;
+
 	CVector(void) {}
 	CVector(float x, float y, float z)
 	{
@@ -64,11 +68,11 @@ public:
 		return CVector(-x, -y, -z);
 	}
 
-	const bool operator==(CVector const &right) {
+	const bool operator==(CVector const &right) const {
 		return x == right.x && y == right.y && z == right.z;
 	}
 
-	const bool operator!=(CVector const &right) {
+	const bool operator!=(CVector const &right) const {
 		return x != right.x || y != right.y || z != right.z;
 	}
 
@@ -127,3 +131,6 @@ class CMatrix;
 CVector Multiply3x3(const CMatrix &mat, const CVector &vec);
 CVector Multiply3x3(const CVector &vec, const CMatrix &mat);
 CVector operator*(const CMatrix &mat, const CVector &vec);
+
+// we need this because CVector and RwV3d have different size now
+void RwV3dTransformPoints(CVector * pointsOut, const CVector * pointsIn, RwInt32 numPoints, const RwMatrix * matrix);

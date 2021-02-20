@@ -56,13 +56,20 @@ function getarch(a)
 	return a
 end
 
-workspace "re3"
+workspace "reLCS"
 	language "C++"
 	configurations { "Debug", "Release", "Vanilla" }
-	startproject "re3"
+	startproject "reLCS"
 	location "build"
 	symbols "Full"
 	staticruntime "off"
+
+	-- for CVECTORHACK
+	configuration { "gmake*" }
+		buildoptions { "-fpermissive" }
+
+	filter { "platforms:macosx*" }
+		buildoptions { "-Wno-address-of-temporary" }
 
 	if _OPTIONS["with-asan"] then
 		buildoptions { "-fsanitize=address -g3 -fno-omit-frame-pointer" }
@@ -71,10 +78,10 @@ workspace "re3"
 
 	filter { "system:windows" }
 		platforms {
-			"win-x86-RW33_d3d8-mss",
+			"win-x86-RW34_d3d8-mss",
 			"win-x86-librw_d3d9-mss",
 			"win-x86-librw_gl3_glfw-mss",
-			"win-x86-RW33_d3d8-oal",
+			"win-x86-RW34_d3d8-oal",
 			"win-x86-librw_d3d9-oal",
 			"win-x86-librw_gl3_glfw-oal",
 			"win-amd64-librw_d3d9-oal",
@@ -96,7 +103,7 @@ workspace "re3"
 			"bsd-arm-librw_gl3_glfw-oal",
 			"bsd-arm64-librw_gl3_glfw-oal"
 		}
-
+		
 	filter { "system:macosx" }
 		platforms {
 			"macosx-arm64-librw_gl3_glfw-oal",
@@ -136,7 +143,7 @@ workspace "re3"
 
 	filter { "platforms:*arm*" }
 		architecture "ARM"
-
+		
 	filter { "platforms:macosx-arm64-*" }
 		buildoptions { "-target", "arm64-apple-macos11", "-std=gnu++14" }
 
@@ -212,7 +219,7 @@ project "librw"
 	filter "platforms:*gl3_glfw*"
 		staticruntime "off"
 	
-	filter "platforms:*RW33*"
+	filter "platforms:*RW34*"
 		flags { "ExcludeFromBuild" }
 	filter  {}
 end
@@ -221,9 +228,9 @@ local function addSrcFiles( prefix )
 	return prefix .. "/*cpp", prefix .. "/*.h", prefix .. "/*.c", prefix .. "/*.ico", prefix .. "/*.rc"
 end
 
-project "re3"
+project "reLCS"
 	kind "WindowedApp"
-	targetname "re3"
+	targetname "reLCS"
 	targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
 
 	if(_OPTIONS["with-librw"]) then
@@ -240,6 +247,8 @@ project "re3"
 	files { addSrcFiles("src/control") }
 	files { addSrcFiles("src/core") }
 	files { addSrcFiles("src/entities") }
+	files { addSrcFiles("src/leeds") }
+	files { addSrcFiles("src/leeds/base") }
 	files { addSrcFiles("src/math") }
 	files { addSrcFiles("src/modelinfo") }
 	files { addSrcFiles("src/objects") }
@@ -265,6 +274,8 @@ project "re3"
 	includedirs { "src/control" }
 	includedirs { "src/core" }
 	includedirs { "src/entities" }
+	includedirs { "src/leeds" }
+	includedirs { "src/leeds/base" }
 	includedirs { "src/math" }
 	includedirs { "src/modelinfo" }
 	includedirs { "src/objects" }
@@ -301,10 +312,10 @@ project "re3"
 		
 	filter "platforms:*oal"
 		defines { "AUDIO_OAL" }
-	
+
 	filter {}
-	if(os.getenv("GTA_III_RE_DIR")) then
-		setpaths(os.getenv("GTA_III_RE_DIR") .. "/", "%(cfg.buildtarget.name)")
+	if(os.getenv("GTA_LCS_RE_DIR")) then
+		setpaths(os.getenv("GTA_LCS_RE_DIR") .. "/", "%(cfg.buildtarget.name)")
 	end
 	
 	filter "platforms:win*"
@@ -319,7 +330,7 @@ project "re3"
 			staticruntime "on"
 		end
 		prebuildcommands { '"%{prj.location}..\\printHash.bat" "%{prj.location}..\\src\\extras\\GitSHA1.cpp"' }
-	
+
 	filter "platforms:not win*"
 		prebuildcommands { '"%{prj.location}/../printHash.sh" "%{prj.location}/../src/extras/GitSHA1.cpp"' }
 
@@ -342,10 +353,10 @@ project "re3"
 		libdirs { "vendor/openal-soft/libs/Win64" }
 
 	filter "platforms:linux*oal"
-		links { "openal", "mpg123", "sndfile", "pthread", "X11" }
+		links { "openal", "mpg123", "sndfile", "pthread" }
 		
 	filter "platforms:bsd*oal"
-		links { "openal", "mpg123", "sndfile", "pthread", "X11" }
+		links { "openal", "mpg123", "sndfile", "pthread" }
 
 	filter "platforms:macosx*oal"
 		links { "openal", "mpg123", "sndfile", "pthread" }
@@ -359,10 +370,10 @@ project "re3"
 		links { "opusfile" }
 	end
 
-	filter "platforms:*RW33*"
+	filter "platforms:*RW34*"
 		includedirs { "sdk/rwsdk/include/d3d8" }
 		libdirs { "sdk/rwsdk/lib/d3d8/release" }
-		links { "rwcore", "rpworld", "rpmatfx", "rpskin", "rphanim", "rtbmp", "rtquat", "rtcharse", "rpanisot" }
+		links { "rwcore", "rpworld", "rpmatfx", "rpskin", "rphanim", "rtbmp", "rtquat", "rtanim", "rtcharse", "rpanisot" }
 		defines { "RWLIBS" }
 		linkoptions "/SECTION:_rwcseg,ER!W /MERGE:_rwcseg=.text"
 	

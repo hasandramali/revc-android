@@ -11,6 +11,17 @@
 #include "Fire.h"
 #include "WaterLevel.h"
 #include "Camera.h"
+#include "Particle.h"
+
+// --LCS: file done
+
+#ifdef PSP_WATERCANNON
+	//PSP:
+	#define WATER_COLOR 255
+#else
+	//PS2:
+	#define WATER_COLOR 127
+#endif
 
 #define WATERCANNONVERTS 4
 #define WATERCANNONINDEXES 12
@@ -77,9 +88,13 @@ void CWaterCannon::Update_OncePerFrame(int16 index)
 		}
 	}
 	
-	int32 extinguishingPoint = CGeneral::GetRandomNumber() & (NUM_SEGMENTPOINTS - 1);
-	if ( m_abUsed[extinguishingPoint] )
-		gFireManager.ExtinguishPoint(m_avecPos[extinguishingPoint], 3.0f);
+	for ( int32 i = 0; i < NUM_SEGMENTPOINTS; i++ )
+	{
+		if ( m_abUsed[i] && gFireManager.ExtinguishPointWithWater(m_avecPos[i], 4.0f) )
+		{
+			break;
+		}
+	}
 	
 	if ( ((index + CTimer::GetFrameCounter()) & 3) == 0 )
 		PushPeds();
@@ -110,23 +125,33 @@ void CWaterCannon::Update_NewInput(CVector *pos, CVector *dir)
 	m_abUsed[m_nCur]       = true;
 }
 
+static float fWaterCannonU = 0.0f;
 void CWaterCannon::Render(void)
 {
+	extern RwRaster *gpFireHoseRaster;
+
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE,      (void *)FALSE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void *)TRUE);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE,         (void *)TRUE);
-	RwRenderStateSet(rwRENDERSTATETEXTURERASTER,     (void *)gpWaterRaster);
+	RwRenderStateSet(rwRENDERSTATETEXTURERASTER,     (void *)gpFireHoseRaster);
 	
-	float v = float(CGeneral::GetRandomNumber() & 255) / 256;
-		
-	RwIm3DVertexSetV(&WaterCannonVertices[0], v);
-	RwIm3DVertexSetV(&WaterCannonVertices[1], v);
-	RwIm3DVertexSetV(&WaterCannonVertices[2], v);
-	RwIm3DVertexSetV(&WaterCannonVertices[3], v);
+	fWaterCannonU += CTimer::GetTimeStepInSeconds() * 6.0f;
 	
+	while ( fWaterCannonU >= 1.0f )
+		fWaterCannonU -= 1.0f;
+	
+	RwIm3DVertexSetU(&WaterCannonVertices[0], -fWaterCannonU);
+	RwIm3DVertexSetV(&WaterCannonVertices[0], 0.0f);
+	RwIm3DVertexSetU(&WaterCannonVertices[1], -fWaterCannonU);
+	RwIm3DVertexSetV(&WaterCannonVertices[1], 1.0f);
+	RwIm3DVertexSetU(&WaterCannonVertices[2], 1.0f - fWaterCannonU);
+	RwIm3DVertexSetV(&WaterCannonVertices[2], 0.0f);
+	RwIm3DVertexSetU(&WaterCannonVertices[3], 1.0f - fWaterCannonU);
+	RwIm3DVertexSetV(&WaterCannonVertices[3], 1.0f);
+
 	int16 pointA = m_nCur % NUM_SEGMENTPOINTS;
-	
 	int16 pointB = pointA - 1;
+	int16 pointC = pointA;
 	if ( pointB < 0 )
 		pointB += NUM_SEGMENTPOINTS;
 
@@ -137,6 +162,10 @@ void CWaterCannon::Render(void)
 	{
 		if ( m_abUsed[pointA] && m_abUsed[pointB] )
 		{
+			bool bFirst = false;
+			if ( i == 0 || m_abUsed[pointA] && !m_abUsed[pointC] )
+				bFirst = true;
+			
 			if ( !bInit )
 			{
 				CVector cp = CrossProduct(m_avecPos[pointB] - m_avecPos[pointA], TheCamera.GetForward());
@@ -144,26 +173,25 @@ void CWaterCannon::Render(void)
 				bInit = true;
 			}
 			
-			float dist       = float(i*i*i) / 300.0f + 1.0f;
 			float brightness = float(i) / NUM_SEGMENTPOINTS;
-			
 			int32 color = (int32)((1.0f - brightness*brightness) * 255.0f);
-			CVector offset = dist * norm;
 			
-			RwIm3DVertexSetRGBA(&WaterCannonVertices[0], color, color, color, color);
+			CVector offset = (float(i)+1.0f) * norm;
+			
+			RwIm3DVertexSetRGBA(&WaterCannonVertices[0], WATER_COLOR, WATER_COLOR, WATER_COLOR, bFirst ? 0 : color);
 			RwIm3DVertexSetPos (&WaterCannonVertices[0], m_avecPos[pointA].x - offset.x, m_avecPos[pointA].y - offset.y, m_avecPos[pointA].z - offset.z);
 				
-			RwIm3DVertexSetRGBA(&WaterCannonVertices[1], color, color, color, color);
+			RwIm3DVertexSetRGBA(&WaterCannonVertices[1], WATER_COLOR, WATER_COLOR, WATER_COLOR, bFirst ? 0 : color);
 			RwIm3DVertexSetPos (&WaterCannonVertices[1], m_avecPos[pointA].x + offset.x, m_avecPos[pointA].y + offset.y, m_avecPos[pointA].z + offset.z);
 			
-			RwIm3DVertexSetRGBA(&WaterCannonVertices[2], color, color, color, color);
+			offset = (float(i+1)+1.0f) * norm;
+			
+			RwIm3DVertexSetRGBA(&WaterCannonVertices[2], WATER_COLOR, WATER_COLOR, WATER_COLOR, color);
 			RwIm3DVertexSetPos (&WaterCannonVertices[2], m_avecPos[pointB].x - offset.x, m_avecPos[pointB].y - offset.y, m_avecPos[pointB].z - offset.z);
 			
-			RwIm3DVertexSetRGBA(&WaterCannonVertices[3], color, color, color, color);
+			RwIm3DVertexSetRGBA(&WaterCannonVertices[3], WATER_COLOR, WATER_COLOR, WATER_COLOR, color);
 			RwIm3DVertexSetPos (&WaterCannonVertices[3], m_avecPos[pointB].x + offset.x, m_avecPos[pointB].y + offset.y, m_avecPos[pointB].z + offset.z);
 			
-			LittleTest();
-
 			if ( RwIm3DTransform(WaterCannonVertices, WATERCANNONVERTS, NULL, rwIM3D_VERTEXUV) )
 			{
 				RwIm3DRenderIndexedPrimitive(rwPRIMTYPETRILIST, WaterCannonIndexList, WATERCANNONINDEXES);
@@ -171,6 +199,7 @@ void CWaterCannon::Render(void)
 			}
 		}
 		
+		pointC = pointA;
 		pointA = pointB--;
 		if ( pointB < 0 )
 			pointB += NUM_SEGMENTPOINTS;
@@ -231,11 +260,16 @@ void CWaterCannon::PushPeds(void)
 							ped->m_vecMoveSpeed.x = (0.6f * m_avecVelocity[j].x + ped->m_vecMoveSpeed.x) * 0.5f;
 							ped->m_vecMoveSpeed.y = (0.6f * m_avecVelocity[j].y + ped->m_vecMoveSpeed.y) * 0.5f;
 							
-							ped->SetFall(2000, AnimationId(ANIM_STD_HIGHIMPACT_FRONT + localDir), 0);
-							
-							CFire *fire = ped->m_pFire;
-							if ( fire )
-								fire->Extinguish();
+							float pedSpeed2D = ped->m_vecMoveSpeed.Magnitude2D();
+
+							if ( pedSpeed2D > 0.2f ) {
+								ped->m_vecMoveSpeed.x *= (0.2f / pedSpeed2D);
+								ped->m_vecMoveSpeed.y *= (0.2f / pedSpeed2D);
+							}
+							ped->SetFall(2000, (AnimationId)(localDir + ANIM_STD_HIGHIMPACT_FRONT), 0);
+							CParticle::AddParticle(PARTICLE_STEAM_NY_SLOWMOTION, ped->GetPosition(), ped->m_vecMoveSpeed * 0.3f, 0, 0.5f);
+							CParticle::AddParticle(PARTICLE_CAR_SPLASH, ped->GetPosition(), ped->m_vecMoveSpeed * -0.3f + CVector(0.f, 0.f, 0.5f), 0, 0.5f,
+								CGeneral::GetRandomNumberInRange(0.f, 10.f), CGeneral::GetRandomNumberInRange(0.f, 90.f), 1);
 							
 							j = NUM_SEGMENTPOINTS;
 						}
@@ -297,11 +331,9 @@ void CWaterCannons::Update(void)
 
 void CWaterCannons::Render(void)
 {
-	PUSH_RENDERGROUP("CWaterCannons::Render");
 	for ( int32 i = 0; i < NUM_WATERCANNONS; i++ )
 	{
 		if ( aCannons[i].m_nId != 0 )
 			aCannons[i].Render();
 	}
-	POP_RENDERGROUP();
 }

@@ -1,10 +1,17 @@
 #include "common.h"
+#include "main.h"
 #include "ColModel.h"
+#include "Collision.h"
 #include "Game.h"
 #include "MemoryHeap.h"
+#include "Pools.h"
 
 CColModel::CColModel(void)
 {
+	boundingSphere.Set(0.0001f, CVector(0.0f, 0.0f, 0.0f));
+	boundingBox.Set(CVector(0.0f, 0.0f, 0.0f), CVector(0.0f, 0.0f, 0.0f));
+	numTriBBoxes = 0;
+	triBBoxes = nil;
 	numSpheres = 0;
 	spheres = nil;
 	numLines = 0;
@@ -15,31 +22,58 @@ CColModel::CColModel(void)
 	vertices = nil;
 	triangles = nil;
 	trianglePlanes = nil;
-	level = CGame::currLevel;
-	ownsCollisionVolumes = true;
+	level = LEVEL_GENERIC;	// generic col slot
+//	ownsCollisionVolumes = true;
 }
 
 CColModel::~CColModel(void)
 {
-	RemoveCollisionVolumes();
-	RemoveTrianglePlanes();
+	if(!gNASTY_NASTY_MEM_SHUTDOWN_HACK){
+		RemoveTrianglePlanes();
+		RemoveCollisionVolumes();
+	}
+}
+
+//--LCS: no pool used, but maybe we better keep it?
+void*
+CColModel::operator new(size_t)
+{
+	CColModel* node = CPools::GetColModelPool()->New();
+	assert(node);
+	return node;
+}
+
+void
+CColModel::operator delete(void *p, size_t)
+{
+	CPools::GetColModelPool()->Delete((CColModel*)p);
 }
 
 void
 CColModel::RemoveCollisionVolumes(void)
 {
-	if(ownsCollisionVolumes){
-		RwFree(spheres);
-		RwFree(lines);
-		RwFree(boxes);
-		RwFree(vertices);
-		RwFree(triangles);
+#ifdef FIX_BUGS
+	// why is this missing?
+	if(ownsCollisionVolumes)
+#endif
+	if(!gUseChunkFiles){
+		delete[] triBBoxes;
+		delete[] spheres;
+		delete[] lines;
+		delete[] boxes;
+		delete[] vertices;
+		delete[] triangles;
 	}
+	CCollision::RemoveTrianglePlanes(this);
 	numSpheres = 0;
+	numTriBBoxes = 0;
 	numLines = 0;
 	numBoxes = 0;
 	numTriangles = 0;
 	spheres = nil;
+#ifdef FIX_BUGS
+	triBBoxes = nil;
+#endif
 	lines = nil;
 	boxes = nil;
 	vertices = nil;
@@ -52,7 +86,7 @@ CColModel::CalculateTrianglePlanes(void)
 	PUSH_MEMID(MEMID_COLLISION);
 
 	// HACK: allocate space for one more element to stuff the link pointer into
-	trianglePlanes = (CColTrianglePlane*)RwMalloc(sizeof(CColTrianglePlane) * (numTriangles+1));
+	trianglePlanes = new CColTrianglePlane[numTriangles+1];
 	REGISTER_MEMPTR(&trianglePlanes);
 	for(int i = 0; i < numTriangles; i++)
 		trianglePlanes[i].Set(vertices, triangles[i]);
@@ -63,8 +97,10 @@ CColModel::CalculateTrianglePlanes(void)
 void
 CColModel::RemoveTrianglePlanes(void)
 {
-	RwFree(trianglePlanes);
-	trianglePlanes = nil;
+	if(trianglePlanes){
+		delete[] trianglePlanes;
+		trianglePlanes = nil;
+	}
 }
 
 void
@@ -96,20 +132,33 @@ CColModel::operator=(const CColModel &other)
 	boundingSphere = other.boundingSphere;
 	boundingBox = other.boundingBox;
 
+	// copy tri bboxes
+	if(other.numTriBBoxes){
+		if(numTriBBoxes != other.numTriBBoxes){
+			numTriBBoxes = other.numTriBBoxes;
+			delete[] triBBoxes;
+			triBBoxes = new CColTriBBox[numTriBBoxes];
+		}
+		for(i = 0; i < numTriBBoxes; i++)
+			triBBoxes[i] = other.triBBoxes[i];
+	}else{
+		numTriBBoxes = 0;
+		delete[] triBBoxes;
+		triBBoxes = nil;
+	}
+
 	// copy spheres
 	if(other.numSpheres){
 		if(numSpheres != other.numSpheres){
 			numSpheres = other.numSpheres;
-			if(spheres)
-				RwFree(spheres);
-			spheres = (CColSphere*)RwMalloc(numSpheres*sizeof(CColSphere));
+			delete[] spheres;
+			spheres = new CColSphere[numSpheres];
 		}
 		for(i = 0; i < numSpheres; i++)
 			spheres[i] = other.spheres[i];
 	}else{
 		numSpheres = 0;
-		if(spheres)
-			RwFree(spheres);
+		delete[] spheres;
 		spheres = nil;
 	}
 
@@ -117,16 +166,14 @@ CColModel::operator=(const CColModel &other)
 	if(other.numLines){
 		if(numLines != other.numLines){
 			numLines = other.numLines;
-			if(lines)
-				RwFree(lines);
-			lines = (CColLine*)RwMalloc(numLines*sizeof(CColLine));
+			delete[] lines;
+			lines = new CColLine[numLines];
 		}
 		for(i = 0; i < numLines; i++)
 			lines[i] = other.lines[i];
 	}else{
 		numLines = 0;
-		if(lines)
-			RwFree(lines);
+		delete[] lines;
 		lines = nil;
 	}
 
@@ -134,23 +181,21 @@ CColModel::operator=(const CColModel &other)
 	if(other.numBoxes){
 		if(numBoxes != other.numBoxes){
 			numBoxes = other.numBoxes;
-			if(boxes)
-				RwFree(boxes);
-			boxes = (CColBox*)RwMalloc(numBoxes*sizeof(CColBox));
+			delete[] boxes;
+			boxes = new CColBox[numBoxes];
 		}
 		for(i = 0; i < numBoxes; i++)
 			boxes[i] = other.boxes[i];
 	}else{
 		numBoxes = 0;
-		if(boxes)
-			RwFree(boxes);
+		delete[] boxes;
 		boxes = nil;
 	}
 
 	// copy mesh
 	if(other.numTriangles){
 		// copy vertices
-		numVerts = 0;
+		numVerts = -1;
 		for(i = 0; i < other.numTriangles; i++){
 			if(other.triangles[i].a > numVerts)
 				numVerts = other.triangles[i].a;
@@ -160,10 +205,9 @@ CColModel::operator=(const CColModel &other)
 				numVerts = other.triangles[i].c;
 		}
 		numVerts++;
-		if(vertices)
-			RwFree(vertices);
+		delete[] vertices;
 		if(numVerts){
-			vertices = (CompressedVector*)RwMalloc(numVerts*sizeof(CompressedVector));
+			vertices = new CompressedVector[numVerts];
 			for(i = 0; i < numVerts; i++)
 				vertices[i] = other.vertices[i];
 		}
@@ -171,20 +215,54 @@ CColModel::operator=(const CColModel &other)
 		// copy triangles
 		if(numTriangles != other.numTriangles){
 			numTriangles = other.numTriangles;
-			if(triangles)
-				RwFree(triangles);
-			triangles = (CColTriangle*)RwMalloc(numTriangles*sizeof(CColTriangle));
+			delete[] triangles;
+			triangles = new CColTriangle[numTriangles];
 		}
 		for(i = 0; i < numTriangles; i++)
 			triangles[i] = other.triangles[i];
 	}else{
 		numTriangles = 0;
-		if(triangles)
-			RwFree(triangles);
+		delete[] triangles;
 		triangles = nil;
-		if(vertices)
-			RwFree(vertices);
+		delete[] vertices;
 		vertices = nil;
 	}
 	return *this;
+}
+
+bool
+CColModel::Write(base::cRelocatableChunkWriter &writer, bool allocSpace)
+{
+	int numVerts = -1;
+	for(int i = 0; i < numTriangles; i++){
+		if(triangles[i].a > numVerts)
+			numVerts = triangles[i].a;
+		if(triangles[i].b > numVerts)
+			numVerts = triangles[i].b;
+		if(triangles[i].c > numVerts)
+			numVerts = triangles[i].c;
+	}
+	numVerts++;
+
+	if(allocSpace)
+		writer.AllocateRaw(this, sizeof(*this), 16, false, true);
+	writer.AllocateRaw(spheres, sizeof(*spheres)*numSpheres, 16, false, true);
+	writer.AddPatch(&spheres);
+	writer.AllocateRaw(lines, sizeof(*lines)*numLines, 16, false, true);
+	writer.AddPatch(&lines);
+	writer.AllocateRaw(boxes, sizeof(*boxes)*numBoxes, 16, false, true);
+	writer.AddPatch(&boxes);
+	if(triBBoxes && numTriBBoxes != 0){
+		writer.AllocateRaw(triBBoxes, sizeof(*triBBoxes)*numTriBBoxes, 16, false, true);
+		writer.AddPatch(&triBBoxes);
+	}else
+		triBBoxes = nil;
+	if(numTriangles != 0){
+		writer.AllocateRaw(vertices, sizeof(*vertices)*numVerts, 2, false, true);
+		writer.AddPatch(&vertices);
+		writer.AllocateRaw(triangles, sizeof(*triangles)*numTriangles, 2, false, true);
+		writer.AddPatch(&triangles);
+		RemoveTrianglePlanes();
+	}
+	return 1;
 }

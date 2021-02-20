@@ -4,17 +4,18 @@
 #include "ParticleType.h"
 #include "Placeable.h"
 
-#define MAX_PARTICLEOBJECTS 100
+#define MAX_PARTICLEOBJECTS 70
 #define MAX_AUDIOHYDRANTS   8
 
 enum eParticleObjectType
 {
-	POBJECT_PAVEMENT_STEAM,
+	POBJECT_PAVEMENT_STEAM = 0,
 	POBJECT_PAVEMENT_STEAM_SLOWMOTION,
 	POBJECT_WALL_STEAM,
 	POBJECT_WALL_STEAM_SLOWMOTION,
 	POBJECT_DARK_SMOKE,
 	POBJECT_FIRE_HYDRANT,
+	POBJECT_FIRE_HYDRANT_STEAM,
 	POBJECT_CAR_WATER_SPLASH,
 	POBJECT_PED_WATER_SPLASH,
 	POBJECT_SPLASHES_AROUND,
@@ -22,6 +23,8 @@ enum eParticleObjectType
 	POBJECT_BIG_FIRE,
 	POBJECT_DRY_ICE,
 	POBJECT_DRY_ICE_SLOWMOTION,
+	POBJECT_WATER_FOUNTAIN_VERT,
+	POBJECT_WATER_FOUNTAIN_HORIZ,
 	POBJECT_FIRE_TRAIL,
 	POBJECT_SMOKE_TRAIL,
 	POBJECT_FIREBALL_AND_SMOKE,
@@ -47,7 +50,7 @@ public:
 	CParticleObject    *m_pNext;
 	CParticleObject    *m_pPrev;
 	CParticle          *m_pParticle;
-	uint32               m_nRemoveTimer;
+	uint32              m_nRemoveTimer;
 	eParticleObjectType m_Type;
 	tParticleType       m_ParticleType;
 	uint8               m_nNumEffectCycles;
@@ -69,12 +72,13 @@ public:
 	~CParticleObject();
 	
 	static void Initialise(void);
-	
-	static CParticleObject *AddObject(uint16 type, CVector const &pos,                                                                          uint8 remove);
-	static CParticleObject *AddObject(uint16 type, CVector const &pos,                        float size,                                       uint8 remove);
-	static CParticleObject *AddObject(uint16 type, CVector const &pos, CVector const &target, float size,                                       uint8 remove);
-	static CParticleObject *AddObject(uint16 type, CVector const &pos, CVector const &target, float size, uint32 lifeTime, RwRGBA const &color, uint8 remove);
-	
+
+	static CParticleObject *AddObject(uint16        type, CVector const &pos,                                                                                                                     uint8 remove);
+	static CParticleObject *AddObject(uint16        type, CVector const &pos,                        float size,                                                                                  uint8 remove);
+	static CParticleObject *AddObject(uint16        type, CVector const &pos, CVector const &target, float size,                                                                                  uint8 remove);	
+	static CParticleObject *AddObject(uint16        type, CVector const &pos, CVector const &target, float size, uint32 lifeTime, RwRGBA const &color,                                            uint8 remove);
+	static CParticleObject *AddObject(tParticleType type, CVector const &pos, CVector const &target, float size, uint32 lifeTime, uint8 numEffectCycles, uint8 skipFrames, uint16 creationChance, uint8 remove);
+
 	void RemoveObject(void);
 	
 	static void UpdateAll(void);
@@ -84,6 +88,7 @@ public:
 	static bool SaveParticle(uint8 *buffer, uint32 *length);
 	static bool LoadParticle(uint8 *buffer, uint32  length);
 	
+	static void RemoveAllExpireableParticleObjects(void);
 	static void RemoveAllParticleObjects(void);
 	static void MoveToList(CParticleObject **from, CParticleObject **to, CParticleObject *obj);
 };
@@ -98,7 +103,7 @@ public:
 	
 	CAudioHydrant() : 
 		AudioEntity(AEHANDLE_NONE),
-		pParticleObject(NULL)
+		pParticleObject(nil)
 	{ }
 	
 	static bool Add   (CParticleObject *particleobject);

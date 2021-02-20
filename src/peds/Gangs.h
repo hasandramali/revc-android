@@ -1,8 +1,12 @@
 #pragma once
 
+#include "PedType.h"
+
 struct CGangInfo
 {
 	int32 m_nVehicleMI;
+	int32 m_nPedModel1MI;
+	int32 m_nPedModel2MI;
 	int8 m_nPedModelOverride;
 	int32 m_Weapon1;
 	int32 m_Weapon2;
@@ -20,8 +24,8 @@ enum {
 	GANG_YARDIE,
 	GANG_COLUMB,
 	GANG_HOODS,
-	GANG_7,
-	GANG_8,
+	GANG_FORELLI,
+	GANG_SINDACCO,
 	NUM_GANGS
 };
 
@@ -36,9 +40,18 @@ public:
 	static void SaveAllGangData(uint8 *, uint32 *);
 	static void LoadAllGangData(uint8 *, uint32);
 
+	static void SetGangPedModels(int16, int32, int32);
+	static void SetWillAttackPlayerWithCops(ePedType type, bool will);
+	static bool GetWillAttackPlayerWithCops(ePedType type);
+	static int32 ChooseGangPedModel(int16);
+
+	static bool HaveGangModelsLoaded(int16 gang);
+	static int32 GetGangPedModel1(int16 gang) { return Gang[gang].m_nPedModel1MI; }
+	static int32 GetGangPedModel2(int16 gang) { return Gang[gang].m_nPedModel2MI; }
 	static int32 GetGangVehicleModel(int16 gang) { return Gang[gang].m_nVehicleMI; }
 	static CGangInfo *GetGangInfo(int16 gang) { return &Gang[gang]; }
 
 private:
 	static CGangInfo Gang[NUM_GANGS];
+	static bool GangAttackWithCops[NUM_GANGS];
 };
