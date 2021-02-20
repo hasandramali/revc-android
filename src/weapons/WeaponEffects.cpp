@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include "main.h"
 #include "WeaponEffects.h"
 #include "TxdStore.h"
 #include "Sprite.h"
@@ -46,7 +47,7 @@ void
 CWeaponEffects::Shutdown(void)
 {
 	RwTextureDestroy(gpCrossHairTex);
-#ifdef GTA3_1_1_PATCH
+#if GTA_VERSION >= GTA3_PC_11
 	gpCrossHairTex = nil;
 #endif
 }
@@ -84,11 +85,15 @@ CWeaponEffects::Render(void)
 		float w, h;
 		if ( CSprite::CalcScreenCoors(gCrossHair.m_vecPos, &pos, &w, &h, true) )
 		{
+			PUSH_RENDERGROUP("CWeaponEffects::Render");
+
 			float recipz = 1.0f / pos.z;
 			CSprite::RenderOneXLUSprite(pos.x, pos.y, pos.z,
 				gCrossHair.m_fSize * w, gCrossHair.m_fSize * h,
 				gCrossHair.m_nRed, gCrossHair.m_nGreen, gCrossHair.m_nBlue, 255,
 				recipz, 255);
+
+			POP_RENDERGROUP();
 		}
 		
 		RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void *)FALSE);

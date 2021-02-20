@@ -34,6 +34,8 @@
 #include "main.h"
 #include "Frontend.h"
 #include "Font.h"
+#include "MemoryMgr.h"
+#include "MemoryHeap.h"
 
 bool CStreaming::ms_disableStreaming;
 bool CStreaming::ms_bLoadingBigModel;
@@ -200,11 +202,15 @@ CStreaming::Init2(void)
 
 	// allocate streaming buffers
 	if(ms_streamingBufferSize & 1) ms_streamingBufferSize++;
+#ifndef ONE_THREAD_PER_CHANNEL
 	ms_pStreamingBuffer[0] = (int8*)RwMallocAlign(ms_streamingBufferSize*CDSTREAM_SECTOR_SIZE, CDSTREAM_SECTOR_SIZE);
 	ms_streamingBufferSize /= 2;
 	ms_pStreamingBuffer[1] = ms_pStreamingBuffer[0] + ms_streamingBufferSize*CDSTREAM_SECTOR_SIZE;
-#ifdef ONE_THREAD_PER_CHANNEL
-	ms_pStreamingBuffer[2] = (int8*)RwMallocAlign(ms_streamingBufferSize*2*CDSTREAM_SECTOR_SIZE, CDSTREAM_SECTOR_SIZE);
+#else
+	ms_pStreamingBuffer[0] = (int8*)RwMallocAlign(ms_streamingBufferSize*2*CDSTREAM_SECTOR_SIZE, CDSTREAM_SECTOR_SIZE);
+	ms_streamingBufferSize /= 2;
+	ms_pStreamingBuffer[1] = ms_pStreamingBuffer[0] + ms_streamingBufferSize*CDSTREAM_SECTOR_SIZE;
+	ms_pStreamingBuffer[2] = ms_pStreamingBuffer[1] + ms_streamingBufferSize*CDSTREAM_SECTOR_SIZE;
 	ms_pStreamingBuffer[3] = ms_pStreamingBuffer[2] + ms_streamingBufferSize*CDSTREAM_SECTOR_SIZE;
 #endif
 	debug("Streaming buffer size is %d sectors", ms_streamingBufferSize);
@@ -456,6 +462,35 @@ CStreaming::LoadCdDirectory(const char *dirname, int n)
 	CFileMgr::CloseFile(fd);
 }
 
+#ifdef USE_CUSTOM_ALLOCATOR
+RpAtomic*
+RegisterAtomicMemPtrsCB(RpAtomic *atomic, void *data)
+{
+#if THIS_IS_COMPATIBLE_WITH_GTA3_RW31
+	// not quite sure what's going on here:
+	// gta3's RW 3.1 allocates separate memory for geometry data of RpGeometry.
+	// Is that a R* change? rpDefaultGeometryInstance also depends on it
+	RpGeometry *geo = RpAtomicGetGeometry(atomic);
+	if(geo->triangles)
+		REGISTER_MEMPTR(&geo->triangles);
+	if(geo->matList.materials)
+		REGISTER_MEMPTR(&geo->matList.materials);
+	if(geo->preLitLum)
+		REGISTER_MEMPTR(&geo->preLitLum);
+	if(geo->texCoords[0])
+		REGISTER_MEMPTR(&geo->texCoords[0]);
+	if(geo->texCoords[1])
+		REGISTER_MEMPTR(&geo->texCoords[1]);
+#else
+	// normally RpGeometry is allocated in one block (excluding morph targets)
+	// so we don't really have allocated pointers in the struct.
+	// NB: in librw we actually do it in two allocations (geometry itself and data)
+	// so we could conceivably come up with something here
+#endif
+	return atomic;
+}
+#endif
+
 bool
 CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 {
@@ -478,10 +513,18 @@ CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 		mi = CModelInfo::GetModelInfo(streamId);
 
 		// Txd has to be loaded
+#ifdef FIX_BUGS
+		if(!HasTxdLoaded(mi->GetTxdSlot())){
+#else
+		// texDict will exist even if only first part has loaded
 		if(CTxdStore::GetSlot(mi->GetTxdSlot())->texDict == nil){
-			debug("failed to load %s because TXD %s is not in memory\n", mi->GetName(), CTxdStore::GetTxdName(mi->GetTxdSlot()));
+#endif
+			debug("failed to load %s because TXD %s is not in memory\n", mi->GetModelName(), CTxdStore::GetTxdName(mi->GetTxdSlot()));
 			RemoveModel(streamId);
+#ifndef FIX_BUGS
+			// if we're just waiting for it to load, don't remove this
 			RemoveTxd(mi->GetTxdSlot());
+#endif
 			ReRequestModel(streamId);
 			RwStreamClose(stream, &mem);
 			return false;
@@ -489,10 +532,14 @@ CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 
 		// Set Txd to use
 		CTxdStore::AddRef(mi->GetTxdSlot());
-		CTxdStore::SetCurrentTxd(mi->GetTxdSlot());
 
+		PUSH_MEMID(MEMID_STREAM_MODELS);
+		CTxdStore::SetCurrentTxd(mi->GetTxdSlot());
 		if(mi->IsSimple()){
 			success = CFileLoader::LoadAtomicFile(stream, streamId);
+#ifdef USE_CUSTOM_ALLOCATOR
+			RegisterAtomicMemPtrsCB(((CSimpleModelInfo*)mi)->m_atomics[0], nil);
+#endif
 		} else if (mi->GetModelType() == MITYPE_VEHICLE) {
 			// load vehicles in two parts
 			CModelInfo::GetModelInfo(streamId)->AddRef();
@@ -501,7 +548,12 @@ CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 				ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_STARTED;
 		}else{
 			success = CFileLoader::LoadClumpFile(stream, streamId);
+#ifdef USE_CUSTOM_ALLOCATOR
+			if(success)
+				RpClumpForAllAtomics((RpClump*)mi->GetRwObject(), RegisterAtomicMemPtrsCB, nil);
+#endif
 		}
+		POP_MEMID();
 		UpdateMemoryUsed();
 
 		// Txd no longer needed unless we only read part of the file
@@ -509,7 +561,7 @@ CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 			CTxdStore::RemoveRefWithoutDelete(mi->GetTxdSlot());
 
 		if(!success){
-			debug("Failed to load %s\n", CModelInfo::GetModelInfo(streamId)->GetName());
+			debug("Failed to load %s\n", CModelInfo::GetModelInfo(streamId)->GetModelName());
 			RemoveModel(streamId);
 			ReRequestModel(streamId);
 			RwStreamClose(stream, &mem);
@@ -525,12 +577,14 @@ CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 			return false;
 		}
 
+		PUSH_MEMID(MEMID_STREAM_TEXUTRES);
 		if(ms_bLoadingBigModel || cdsize > 200){
 			success = CTxdStore::StartLoadTxd(streamId - STREAM_OFFSET_TXD, stream);
 			if(success)
 				ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_STARTED;
 		}else
 		        success = CTxdStore::LoadTxd(streamId - STREAM_OFFSET_TXD, stream);
+		POP_MEMID();
 		UpdateMemoryUsed();
 
 		if(!success){
@@ -548,7 +602,7 @@ CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 	if(!success){
 		ReRequestModel(streamId);
 		if(streamId < STREAM_OFFSET_TXD)
-			debug("Failed to load %s.dff\n", mi->GetName());
+			debug("Failed to load %s.dff\n", mi->GetModelName());
 		else
 			debug("Failed to load %s.txd\n", CTxdStore::GetTxdName(streamId - STREAM_OFFSET_TXD));
 		return false;
@@ -580,14 +634,16 @@ CStreaming::ConvertBufferToObject(int8 *buf, int32 streamId)
 	// Mark objects as loaded
 	if(ms_aInfoForModel[streamId].m_loadState != STREAMSTATE_STARTED){
 		ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_LOADED;
+#ifndef USE_CUSTOM_ALLOCATOR
 		ms_memoryUsed += ms_aInfoForModel[streamId].GetCdSize() * CDSTREAM_SECTOR_SIZE;
+#endif
 	}
 
 	endTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond();
 	timeDiff = endTime - startTime;
 	if(timeDiff > 5){
 		if(streamId < STREAM_OFFSET_TXD)
-			debug("model %s took %d ms\n", CModelInfo::GetModelInfo(streamId)->GetName(), timeDiff);
+			debug("model %s took %d ms\n", CModelInfo::GetModelInfo(streamId)->GetModelName(), timeDiff);
 		else
 			debug("txd %s took %d ms\n", CTxdStore::GetTxdName(streamId - STREAM_OFFSET_TXD), timeDiff);
 	}
@@ -620,37 +676,48 @@ CStreaming::FinishLoadingLargeFile(int8 *buf, int32 streamId)
 	if(streamId < STREAM_OFFSET_TXD){
 		// Model
 		mi = CModelInfo::GetModelInfo(streamId);
+		PUSH_MEMID(MEMID_STREAM_MODELS);
 		CTxdStore::SetCurrentTxd(mi->GetTxdSlot());
 		success = CFileLoader::FinishLoadClumpFile(stream, streamId);
-		if(success)
+		if(success){
+#ifdef USE_CUSTOM_ALLOCATOR
+			RpClumpForAllAtomics((RpClump*)mi->GetRwObject(), RegisterAtomicMemPtrsCB, nil);
+#endif
 			success = AddToLoadedVehiclesList(streamId);
+		}
+		POP_MEMID();
 		mi->RemoveRef();
 		CTxdStore::RemoveRefWithoutDelete(mi->GetTxdSlot());
 	}else{
 		// Txd
 		CTxdStore::AddRef(streamId - STREAM_OFFSET_TXD);
+		PUSH_MEMID(MEMID_STREAM_TEXUTRES);
 		success = CTxdStore::FinishLoadTxd(streamId - STREAM_OFFSET_TXD, stream);
+		POP_MEMID();
 		CTxdStore::RemoveRefWithoutDelete(streamId - STREAM_OFFSET_TXD);
 	}
 
 	RwStreamClose(stream, &mem);
-	ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_LOADED;
+
+	ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_LOADED;	// only done if success on PS2
+#ifndef USE_CUSTOM_ALLOCATOR
 	ms_memoryUsed += ms_aInfoForModel[streamId].GetCdSize() * CDSTREAM_SECTOR_SIZE;
+#endif
 
 	if(!success){
 		RemoveModel(streamId);
 		ReRequestModel(streamId);
-		UpdateMemoryUsed();
+		UpdateMemoryUsed();	// directly after pop on PS2
 		return false;
 	}
 
-	UpdateMemoryUsed();
+	UpdateMemoryUsed();	// directly after pop on PS2
 
 	endTime = CTimer::GetCurrentTimeInCycles() / CTimer::GetCyclesPerMillisecond();
 	timeDiff = endTime - startTime;
 	if(timeDiff > 5){
 		if(streamId < STREAM_OFFSET_TXD)
-			debug("finish model %s took %d ms\n", CModelInfo::GetModelInfo(streamId)->GetName(), timeDiff);
+			debug("finish model %s took %d ms\n", CModelInfo::GetModelInfo(streamId)->GetModelName(), timeDiff);
 		else
 			debug("finish txd %s took %d ms\n", CTxdStore::GetTxdName(streamId - STREAM_OFFSET_TXD), timeDiff);
 	}
@@ -804,14 +871,14 @@ CStreaming::RequestSpecialModel(int32 modelId, const char *modelName, int32 flag
 	uint32 pos, size;
 
 	mi = CModelInfo::GetModelInfo(modelId);
-	if(!CGeneral::faststrcmp(mi->GetName(), modelName)){
+	if(!CGeneral::faststrcmp(mi->GetModelName(), modelName)){
 		// Already have the correct name, just request it
 		RequestModel(modelId, flags);
 		return;
 	}
 
-	strcpy(oldName, mi->GetName());
-	mi->SetName(modelName);
+	strcpy(oldName, mi->GetModelName());
+	mi->SetModelName(modelName);
 
 	// What exactly is going on here?
 	if(CModelInfo::GetModelInfo(oldName, nil)){
@@ -877,7 +944,11 @@ CStreaming::RemoveModel(int32 id)
 			CModelInfo::GetModelInfo(id)->DeleteRwObject();
 		else
 			CTxdStore::RemoveTxd(id - STREAM_OFFSET_TXD);
+#ifdef USE_CUSTOM_ALLOCATOR
+		UpdateMemoryUsed();
+#else
 		ms_memoryUsed -= ms_aInfoForModel[id].GetCdSize()*CDSTREAM_SECTOR_SIZE;
+#endif
 	}
 
 	if(ms_aInfoForModel[id].m_next){
@@ -899,6 +970,9 @@ CStreaming::RemoveModel(int32 id)
 			RpClumpGtaCancelStream();
 		else
 			CTxdStore::RemoveTxd(id - STREAM_OFFSET_TXD);
+#ifdef USE_CUSTOM_ALLOCATOR
+		UpdateMemoryUsed();
+#endif
 	}
 
 	ms_aInfoForModel[id].m_loadState = STREAMSTATE_NOTLOADED;
@@ -1862,9 +1936,10 @@ CStreaming::LoadRequestedModels(void)
 }
 
 
-// Let's load models first, then process it. Unfortunately processing models are still single-threaded.
+// Let's load models in 4 threads; when one of them becomes idle, process the file, and fill thread with another file. Unfortunately processing models are still single-threaded.
 // Currently only supported on POSIX streamer.
-#ifdef ONE_THREAD_PER_CHANNEL
+// WIP - some files are loaded swapped (CdStreamPosix problem?)
+#if 0 //def ONE_THREAD_PER_CHANNEL
 void
 CStreaming::LoadAllRequestedModels(bool priority)
 {
@@ -1882,14 +1957,18 @@ CStreaming::LoadAllRequestedModels(bool priority)
 	int streamIds[ARRAY_SIZE(ms_pStreamingBuffer)];
 	int streamSizes[ARRAY_SIZE(ms_pStreamingBuffer)];
 	int streamPoses[ARRAY_SIZE(ms_pStreamingBuffer)];
-	bool first = true;
+	int readOrder[4] = {-1}; // Channel IDs ordered by read time
+	int readI = 0;
 	int processI = 0;
+	bool first = true;
+
+	// All those "first" checks are because of variables aren't initialized in first pass.
 
 	while (true) {
-		// Enumerate files and start reading
 		for (int i=0; i<ARRAY_SIZE(ms_pStreamingBuffer); i++) {
+
+			// Channel has file to load
 			if (!first && streamIds[i] != -1) {
-				processI = i;
 				continue;
 			}
 
@@ -1902,12 +1981,16 @@ CStreaming::LoadAllRequestedModels(bool priority)
 
 				if (ms_aInfoForModel[streamId].GetCdPosnAndSize(posn, size)) {
 					streamIds[i] = -1;
+
+					// Big file, needs 2 buffer
 					if (size > (uint32)ms_streamingBufferSize) {
 						if (i + 1 == ARRAY_SIZE(ms_pStreamingBuffer))
-							continue;
+							break;
 						else if (!first && streamIds[i+1] != -1)
 							continue;
+
 					} else {
+						// Buffer of current channel is part of a "big file", pass
 						if (i != 0 && streamIds[i-1] != -1 && streamSizes[i-1] > (uint32)ms_streamingBufferSize)
 							continue;
 					}
@@ -1917,8 +2000,18 @@ CStreaming::LoadAllRequestedModels(bool priority)
 					streamIds[i] = streamId;
 					streamSizes[i] = size;
 					streamPoses[i] = posn;
+
+					if (!first)
+						assert(readOrder[readI] == -1);
+
+					//printf("read: order %d, ch %d, id %d, size %d\n", readI, i, streamId, size);
+
 					CdStreamRead(i, ms_pStreamingBuffer[i], imgOffset+posn, size);
-					processI = i;
+					readOrder[readI] = i;
+					if (first && readI+1 != ARRAY_SIZE(readOrder))
+						readOrder[readI+1] = -1;
+
+					readI = (readI + 1) % ARRAY_SIZE(readOrder);
 				} else {
 					ms_aInfoForModel[streamId].RemoveFromList();
 					DecrementRef(streamId);
@@ -1926,33 +2019,40 @@ CStreaming::LoadAllRequestedModels(bool priority)
 					ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_LOADED;
 					streamIds[i] = -1;
 				}
-			} else
+			} else {
 				streamIds[i] = -1;
+				break;
+			}
 		}
 
 		first = false;
+		int nextChannel = readOrder[processI];
 
-		// Now process
-		if (streamIds[processI] == -1) 
+		// Now start processing
+		if (nextChannel == -1 || streamIds[nextChannel] == -1)
 			break;
 
-		// Try again on error
-		while (CdStreamSync(processI) != STREAM_NONE) {
-			CdStreamRead(processI, ms_pStreamingBuffer[processI], imgOffset+streamPoses[processI], streamSizes[processI]);
-		}
-		ms_aInfoForModel[streamIds[processI]].m_loadState = STREAMSTATE_READING;
-		
-		MakeSpaceFor(streamSizes[processI] * CDSTREAM_SECTOR_SIZE);
-		ConvertBufferToObject(ms_pStreamingBuffer[processI], streamIds[processI]);
-		if(ms_aInfoForModel[streamIds[processI]].m_loadState == STREAMSTATE_STARTED)
-			FinishLoadingLargeFile(ms_pStreamingBuffer[processI], streamIds[processI]);
+		//printf("process: order %d, ch %d, id %d\n", processI, nextChannel, streamIds[nextChannel]);
 
-		if(streamIds[processI] < STREAM_OFFSET_TXD){
-			CSimpleModelInfo *mi = (CSimpleModelInfo*)CModelInfo::GetModelInfo(streamIds[processI]);
+		// Try again on error
+		while (CdStreamSync(nextChannel) != STREAM_NONE) {
+			CdStreamRead(nextChannel, ms_pStreamingBuffer[nextChannel], imgOffset+streamPoses[nextChannel], streamSizes[nextChannel]);
+		}
+		ms_aInfoForModel[streamIds[nextChannel]].m_loadState = STREAMSTATE_READING;
+
+		MakeSpaceFor(streamSizes[nextChannel] * CDSTREAM_SECTOR_SIZE);
+		ConvertBufferToObject(ms_pStreamingBuffer[nextChannel], streamIds[nextChannel]);
+		if(ms_aInfoForModel[streamIds[nextChannel]].m_loadState == STREAMSTATE_STARTED)
+			FinishLoadingLargeFile(ms_pStreamingBuffer[nextChannel], streamIds[nextChannel]);
+
+		if(streamIds[nextChannel] < STREAM_OFFSET_TXD){
+			CSimpleModelInfo *mi = (CSimpleModelInfo*)CModelInfo::GetModelInfo(streamIds[nextChannel]);
 			if(mi->IsSimple())
 				mi->m_alpha = 255;
 		}
-		streamIds[processI] = -1;
+		streamIds[nextChannel] = -1;
+		readOrder[processI] = -1;
+		processI = (processI + 1) % ARRAY_SIZE(readOrder);
 	}
 
 	ms_bLoadingBigModel = false;
@@ -1991,7 +2091,7 @@ CStreaming::LoadAllRequestedModels(bool priority)
 				status = CdStreamRead(0, ms_pStreamingBuffer[0], imgOffset+posn, size);
 			while(CdStreamSync(0) || status == STREAM_NONE);
 			ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_READING;
-			
+
 			MakeSpaceFor(size * CDSTREAM_SECTOR_SIZE);
 			ConvertBufferToObject(ms_pStreamingBuffer[0], streamId);
 			if(ms_aInfoForModel[streamId].m_loadState == STREAMSTATE_STARTED)
@@ -2048,7 +2148,7 @@ CStreaming::FlushRequestList(void)
 		next = si->m_next;
 		RemoveModel(si - ms_aInfoForModel);
 	}
-#ifndef _WIN32
+#ifdef FLUSHABLE_STREAMING
 	if(ms_channel[0].state == CHANNELSTATE_READING) {
 		flushStream[0] = 1;
 	}
@@ -2063,19 +2163,25 @@ CStreaming::FlushRequestList(void)
 void
 CStreaming::ImGonnaUseStreamingMemory(void)
 {
-	// empty
+	PUSH_MEMID(MEMID_STREAM);
 }
 
 void
 CStreaming::IHaveUsedStreamingMemory(void)
 {
+	POP_MEMID();
 	UpdateMemoryUsed();
 }
 
 void
 CStreaming::UpdateMemoryUsed(void)
 {
-	// empty
+#ifdef USE_CUSTOM_ALLOCATOR
+	ms_memoryUsed =
+		gMainHeap.GetMemoryUsed(MEMID_STREAM) +
+		gMainHeap.GetMemoryUsed(MEMID_STREAM_MODELS) +
+		gMainHeap.GetMemoryUsed(MEMID_STREAM_TEXUTRES);
+#endif
 }
 
 #define STREAM_DIST 80.0f
@@ -2699,7 +2805,7 @@ CStreaming::PrintStreamingBufferState()
 						sprintf(str, "txd %s, refs %d, size %dK, flags 0x%x", CTxdStore::GetTxdName(modelIndex - STREAM_OFFSET_TXD),
 						        CTxdStore::GetNumRefs(modelIndex - STREAM_OFFSET_TXD), 2 * size, streamingInfo->m_flags);
 					else
-						sprintf(str, "model %d,%s, refs%d, size%dK, flags%x", modelIndex, modelInfo->GetName(), modelInfo->GetNumRefs(), 2 * size,
+						sprintf(str, "model %d,%s, refs%d, size%dK, flags%x", modelIndex, modelInfo->GetModelName(), modelInfo->GetNumRefs(), 2 * size,
 						        streamingInfo->m_flags);
 					AsciiToUnicode(str, wstr);
 					CFont::PrintString(24.0f, y, wstr);

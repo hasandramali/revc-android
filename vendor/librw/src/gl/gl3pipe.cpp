@@ -9,9 +9,7 @@
 #include "../rwpipeline.h"
 #include "../rwobjects.h"
 #include "../rwengine.h"
-#ifdef RW_OPENGL
-#include <GL/glew.h>
-#endif
+
 #include "rwgl3.h"
 #include "rwgl3shader.h"
 
@@ -38,6 +36,7 @@ freeInstanceData(Geometry *geometry)
 	rwFree(header->indexBuffer);
 	rwFree(header->vertexBuffer);
 	rwFree(header->attribDesc);
+	rwFree(header->inst);
 	rwFree(header);
 }
 

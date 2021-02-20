@@ -305,7 +305,7 @@ struct RawMatrix
 	V3d at;
 	float32 atw;
 	V3d pos;
-	float32 posw;;
+	float32 posw;
 
 	static void mult(RawMatrix *dst, RawMatrix *src1, RawMatrix *src2);
 	static void transpose(RawMatrix *dst, RawMatrix *src);
@@ -486,11 +486,12 @@ public:
 
 class StreamMemory : public Stream
 {
+public:
 	uint8 *data;
 	uint32 length;
 	uint32 capacity;
 	uint32 position;
-public:
+
 	void close(void);
 	uint32 write8(const void *data, uint32 length);
 	uint32 read8(void *data, uint32 length);
@@ -507,8 +508,9 @@ public:
 
 class StreamFile : public Stream
 {
-	FILE *file;
 public:
+	FILE *file;
+
 	StreamFile(void) { file = nil; }
 	void close(void);
 	uint32 write8(const void *data, uint32 length);
@@ -592,6 +594,7 @@ enum PluginID
 	ID_HANIM         = MAKEPLUGINID(VEND_CRITERIONTK, 0x1E),
 	ID_USERDATA      = MAKEPLUGINID(VEND_CRITERIONTK, 0x1F),
 	ID_MATFX         = MAKEPLUGINID(VEND_CRITERIONTK, 0x20),
+	ID_ANISOT        = MAKEPLUGINID(VEND_CRITERIONTK, 0x27),
 	ID_PDS           = MAKEPLUGINID(VEND_CRITERIONTK, 0x31),
 	ID_ADC           = MAKEPLUGINID(VEND_CRITERIONTK, 0x34),
 	ID_UVANIMATION   = MAKEPLUGINID(VEND_CRITERIONTK, 0x35),

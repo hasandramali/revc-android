@@ -52,6 +52,8 @@ CRubbish::Render(void)
 {
 	int type;
 
+	PUSH_RENDERGROUP("CRubbish::Render");
+
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)TRUE);
@@ -137,6 +139,8 @@ CRubbish::Render(void)
 	RwRenderStateSet(rwRENDERSTATEFOGENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEZWRITEENABLE, (void*)FALSE);
 	RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, (void*)TRUE);
+
+	POP_RENDERGROUP();
 }
 
 void
@@ -414,19 +418,19 @@ void
 CRubbish::Shutdown(void)
 {
 	RwTextureDestroy(gpRubbishTexture[0]);
-#ifdef GTA3_1_1_PATCH
+#if GTA_VERSION >= GTA3_PC_11
 	gpRubbishTexture[0] = nil;
 #endif
 	RwTextureDestroy(gpRubbishTexture[1]);
-#ifdef GTA3_1_1_PATCH
+#if GTA_VERSION >= GTA3_PC_11
 	gpRubbishTexture[1] = nil;
 #endif
 	RwTextureDestroy(gpRubbishTexture[2]);
-#ifdef GTA3_1_1_PATCH
+#if GTA_VERSION >= GTA3_PC_11
 	gpRubbishTexture[2] = nil;
 #endif
 	RwTextureDestroy(gpRubbishTexture[3]);
-#ifdef GTA3_1_1_PATCH
+#if GTA_VERSION >= GTA3_PC_11
 	gpRubbishTexture[3] = nil;
 #endif
 }

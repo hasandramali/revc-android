@@ -665,7 +665,7 @@ correctPathCase(char *filename)
 		sofar[2] = '\0';
 		arg++;
 	}
-	while(dir = strtok(arg, PSEP_S)){
+	while((dir = strtok(arg, PSEP_S))){
 		arg = nil;
 		if(direct = opendir(sofar), dir == nil)
 			return;
@@ -760,7 +760,7 @@ Stream::write32(const void *data, uint32 length)
 	for(len = length >>= 2; len > 0; len -= 256){
 		n = len < 256 ? len : 256;
 		memcpy(buf, src, n*4);
-		memLittle16(buf, n*4);
+		memLittle32(buf, n*4);
 		write8(buf, n*4);
 		src += n*4;
 	}
@@ -1107,7 +1107,8 @@ uint8*
 getFileContents(const char *name, uint32 *len)
 {
 	FILE *cf = fopen(name, "rb");
-	assert(cf != nil);
+	if(cf == nil)
+		return nil;
 	fseek(cf, 0, SEEK_END);
 	*len = ftell(cf);
 	fseek(cf, 0, SEEK_SET);

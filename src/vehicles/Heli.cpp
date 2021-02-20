@@ -474,7 +474,7 @@ CHeli::ProcessControl(void)
 			// Shoot
 			int shootTimeout;
 			if (m_heliType == HELI_TYPE_RANDOM) {
-				switch (FindPlayerPed()->m_pWanted->m_nWantedLevel) {
+				switch (FindPlayerPed()->m_pWanted->GetWantedLevel()) {
 				case 0:
 				case 1:
 				case 2: shootTimeout = 999999; break;
@@ -778,16 +778,25 @@ CHeli::InitHelis(void)
 	for(i = 0; i < NUM_HELIS; i++)
 		pHelis[i] = nil;
 
+#if GTA_VERSION >= GTA3_PS2_160
 	((CVehicleModelInfo*)CModelInfo::GetModelInfo(MI_ESCAPE))->SetColModel(&CTempColModels::ms_colModelPed1);
 	((CVehicleModelInfo*)CModelInfo::GetModelInfo(MI_CHOPPER))->SetColModel(&CTempColModels::ms_colModelPed1);
+#endif
 }
 
 CHeli*
-GenerateHeli(bool catalina)
+CHeli::GenerateHeli(bool catalina)
 {
 	CHeli *heli;
 	CVector heliPos;
 	int i;
+
+#if GTA_VERSION < GTA3_PS2_160
+	if(catalina)
+		((CVehicleModelInfo*)CModelInfo::GetModelInfo(MI_ESCAPE))->SetColModel(&CTempColModels::ms_colModelPed1);
+	else
+		((CVehicleModelInfo*)CModelInfo::GetModelInfo(MI_CHOPPER))->SetColModel(&CTempColModels::ms_colModelPed1);
+#endif
 
 	if(catalina)
 		heli = new CHeli(MI_ESCAPE, PERMANENT_VEHICLE);
@@ -821,7 +830,7 @@ GenerateHeli(bool catalina)
 		id++;
 		found = true;
 		for(i = 0; i < 4; i++)
-			if(CHeli::pHelis[i] && CHeli::pHelis[i]->m_nHeliId == id)
+			if(pHelis[i] && pHelis[i]->m_nHeliId == id)
 				found = false;
 	}
 	heli->m_nHeliId = id;

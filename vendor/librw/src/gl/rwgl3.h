@@ -1,5 +1,5 @@
 #ifdef RW_GL3
-#include <GL/glew.h>
+#include "glad/glad.h"
 #ifdef LIBRW_SDL2
 #include <SDL.h>
 #else
@@ -130,8 +130,9 @@ struct Im2DVertex
 	void setScreenX(float32 x) { this->x = x; }
 	void setScreenY(float32 y) { this->y = y; }
 	void setScreenZ(float32 z) { this->z = z; }
+	// This is a bit unefficient but we have to counteract GL's divide, so multiply
 	void setCameraZ(float32 z) { this->w = z; }
-	void setRecipCameraZ(float32 recipz) { }
+	void setRecipCameraZ(float32 recipz) { this->w = 1.0f/recipz; }
 	void setColor(uint8 r, uint8 g, uint8 b, uint8 a) {
 		this->r = r; this->g = g; this->b = b; this->a = a; }
 	void setU(float32 u, float recipz) { this->u = u; }
@@ -149,6 +150,8 @@ struct Im2DVertex
 
 void setAttribPointers(AttribDesc *attribDescs, int32 numAttribs);
 void disableAttribPointers(AttribDesc *attribDescs, int32 numAttribs);
+void setupVertexInput(InstanceDataHeader *header);
+void teardownVertexInput(InstanceDataHeader *header);
 
 // Render state
 
@@ -180,7 +183,15 @@ int32 setLights(WorldLights *lightData);
 
 // per Mesh
 void setTexture(int32 n, Texture *tex);
-void setMaterial(const RGBA &color, const SurfaceProperties &surfaceprops);
+void setMaterial(const RGBA &color, const SurfaceProperties &surfaceprops, float extraSurfProp = 0.0f);
+inline void setMaterial(uint32 flags, const RGBA &color, const SurfaceProperties &surfaceprops, float extraSurfProp = 0.0f)
+{
+	static RGBA white = { 255, 255, 255, 255 };
+	if(flags & Geometry::MODULATE)
+		setMaterial(color, surfaceprops, extraSurfProp);
+	else
+		setMaterial(white, surfaceprops, extraSurfProp);
+}
 
 void setAlphaBlend(bool32 enable);
 bool32 getAlphaBlend(void);
@@ -239,6 +250,7 @@ struct Gl3Raster
 	uint8 filterMode;
 	uint8 addressU;
 	uint8 addressV;
+	int32 maxAnisotropy;
 
 	uint32 fbo;		// used for camera texture only!
 	Raster *fboMate;	// color or zbuffer raster mate of this one
@@ -251,6 +263,7 @@ struct Gl3Caps
 	int glversion;
 	bool dxtSupported;
 	bool astcSupported;	// not used yet
+	float maxAnisotropy;
 };
 extern Gl3Caps gl3Caps;
 // GLES can't read back textures very nicely.

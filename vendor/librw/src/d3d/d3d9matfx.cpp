@@ -79,9 +79,10 @@ uploadEnvMatrix(Frame *frame)
 		frame = engine->currentCamera->getFrame();
 
 	// cache the matrix across multiple meshes
-	if(frame == lastEnvFrame)
-		return;
-	lastEnvFrame = frame;
+// can't do it, frame matrix may change
+//	if(frame == lastEnvFrame)
+//		return;
+//	lastEnvFrame = frame;
 
 	RawMatrix envMtx, invMtx;
 	Matrix::invert(&invMat, frame->getLTM());
@@ -149,6 +150,7 @@ void
 matfxRenderCB_Shader(Atomic *atomic, InstanceDataHeader *header)
 {
 	int vsBits;
+	uint32 flags = atomic->geometry->flags;
 	setStreamSource(0, (IDirect3DVertexBuffer9*)header->vertexStream[0].vertexBuffer,
 	                           0, header->vertexStream[0].stride);
 	setIndices((IDirect3DIndexBuffer9*)header->indexBuffer);
@@ -165,7 +167,7 @@ matfxRenderCB_Shader(Atomic *atomic, InstanceDataHeader *header)
 	for(uint32 i = 0; i < header->numMeshes; i++){
 		Material *m = inst->material;
 
-		setMaterial(m->color, m->surfaceProps);
+		setMaterial(flags, m->color, m->surfaceProps);
 
 		MatFX *matfx = MatFX::get(m);
 		if(matfx == nil)

@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include "TempColModels.h"
+#include "Game.h"
 
 CColModel CTempColModels::ms_colModelPed1;
 CColModel CTempColModels::ms_colModelPed2;
@@ -40,7 +41,7 @@ CTempColModels::Initialise(void)
 	colmodel.numSpheres = ARRAY_SIZE(sphrs);\
 	colmodel.spheres = sphrs;\
 	colmodel.level = LEVEL_GENERIC;\
-	colmodel.ownsCollisionVolumes = false;\
+	colmodel.ownsCollisionVolumes = false;
 
 	int i;
 

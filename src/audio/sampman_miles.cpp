@@ -1,8 +1,7 @@
 #include "common.h"
 
 #ifdef AUDIO_MSS
-#include <windows.h>
-#include <shobjidl.h>
+#include <shlobj.h>
 #include <shlguid.h>
 
 #include <time.h>
@@ -65,7 +64,7 @@ uint32 _CurMP3Index;
 int32 _CurMP3Pos;
 bool _bIsMp3Active;
 
-#if defined(GTA3_1_1_PATCH) || defined(GTA3_STEAM_PATCH) || defined(NO_CDCHECK)
+#if GTA_VERSION >= GTA3_PC_11 || defined(NO_CDCHECK)
 bool _bUseHDDAudio;
 char _aHDDPath[MAX_PATH];
 #endif
@@ -1043,7 +1042,7 @@ cSampleManager::Initialise(void)
 					
 			if ( !m_bInitialised )
 			{
-#if !defined(GTA3_STEAM_PATCH) && !defined(NO_CDCHECK)
+#if GTA_VERSION < GTA3_PC_STEAM && !defined(NO_CDCHECK)
 				FrontEndMenuManager.WaitForUserCD();
 				if ( FrontEndMenuManager.m_bQuitGameNoCD )
 				{
@@ -1060,7 +1059,7 @@ cSampleManager::Initialise(void)
 		}
 	}
 
-#if defined(GTA3_1_1_PATCH) || defined(GTA3_STEAM_PATCH) || defined(NO_CDCHECK)
+#if GTA_VERSION >= GTA3_PC_11 || defined(NO_CDCHECK)
 	// hddaudio
 	/**
 		Option for user to play audio files directly from hard disk.
@@ -1297,17 +1296,17 @@ cSampleManager::Terminate(void)
 bool
 cSampleManager::CheckForAnAudioFileOnCD(void)
 {
-#if !defined(GTA3_STEAM_PATCH) && !defined(NO_CDCHECK)
+#if GTA_VERSION < GTA3_PC_STEAM && !defined(NO_CDCHECK)
 	char filepath[MAX_PATH];
 	
-#if defined(GTA3_1_1_PATCH)
+#if GTA_VERSION >= GTA3_PC_11
 	if (_bUseHDDAudio)
 		strcpy(filepath, _aHDDPath);
 	else
 		strcpy(filepath, m_szCDRomRootPath);
 #else
 	strcpy(filepath, m_szCDRomRootPath);
-#endif // #if defined(GTA3_1_1_PATCH)
+#endif // #if GTA_VERSION >= GTA3_PC_11
 
 	strcat(filepath, StreamedNameTable[AudioManager.GetRandomNumber(1) % TOTAL_STREAMED_SOUNDS]);
 	
@@ -1324,13 +1323,13 @@ cSampleManager::CheckForAnAudioFileOnCD(void)
 	
 #else
 	return true;
-#endif // #if !defined(GTA3_STEAM_PATCH) && !defined(NO_CDCHECK)
+#endif // #if GTA_VERSION < GTA3_PC_STEAM && !defined(NO_CDCHECK)
 }
 
 char
 cSampleManager::GetCDAudioDriveLetter(void)
 {
-#if defined(GTA3_1_1_PATCH) || defined(GTA3_STEAM_PATCH) || defined(NO_CDCHECK)
+#if GTA_VERSION >= GTA3_PC_11 || defined(NO_CDCHECK)
 	if (_bUseHDDAudio)
 	{
 		if ( strlen(_aHDDPath) != 0 )
@@ -1515,7 +1514,7 @@ cSampleManager::LoadPedComment(uint32 nComment)
 			
 			case MUSICMODE_FRONTEND:
 			{
-				if ( MusicManager.GetCurrentTrack() == STREAMED_SOUND_GAME_COMPLETED )
+				if ( MusicManager.GetNextTrack() == STREAMED_SOUND_GAME_COMPLETED )
 					return false;
 
 				break;
@@ -1754,8 +1753,8 @@ cSampleManager::SetChannelEmittingVolume(uint32 nChannel, uint32 nVolume)
 	
 	// increase the volume for JB.MP3 and S4_BDBD.MP3
 	if (   MusicManager.GetMusicMode()    == MUSICMODE_CUTSCENE
-		&& MusicManager.GetCurrentTrack() != STREAMED_SOUND_NEWS_INTRO
-		&& MusicManager.GetCurrentTrack() != STREAMED_SOUND_CUTSCENE_SAL4_BDBD )
+		&& MusicManager.GetNextTrack() != STREAMED_SOUND_NEWS_INTRO
+		&& MusicManager.GetNextTrack() != STREAMED_SOUND_CUTSCENE_SAL4_BDBD )
 	{
 		nChannelVolume[nChannel] >>= 2;
 	}
@@ -1793,8 +1792,8 @@ cSampleManager::SetChannelVolume(uint32 nChannel, uint32 nVolume)
 			
 			// increase the volume for JB.MP3 and S4_BDBD.MP3
 			if (   MusicManager.GetMusicMode()    == MUSICMODE_CUTSCENE
-				&& MusicManager.GetCurrentTrack() != STREAMED_SOUND_NEWS_INTRO
-				&& MusicManager.GetCurrentTrack() != STREAMED_SOUND_CUTSCENE_SAL4_BDBD )
+				&& MusicManager.GetNextTrack() != STREAMED_SOUND_NEWS_INTRO
+				&& MusicManager.GetNextTrack() != STREAMED_SOUND_CUTSCENE_SAL4_BDBD )
 			{
 				nChannelVolume[nChannel] >>= 2;
 			}
@@ -2047,141 +2046,131 @@ cSampleManager::StartPreloadedStreamedFile(uint8 nStream)
 bool
 cSampleManager::StartStreamedFile(uint8 nFile, uint32 nPos, uint8 nStream)
 {
+	int i = 0;
 	uint32 position = nPos;
 	char filename[MAX_PATH];
 	
-	if ( m_bInitialised && nFile < TOTAL_STREAMED_SOUNDS )
+	if ( !m_bInitialised || nFile >= TOTAL_STREAMED_SOUNDS )
+		return false;
+
+	if ( mp3Stream[nStream] )
 	{
-		if ( mp3Stream[nStream] )
+		AIL_pause_stream(mp3Stream[nStream], 1);
+		AIL_close_stream(mp3Stream[nStream]);
+	}
+	if ( nFile == STREAMED_SOUND_RADIO_MP3_PLAYER )
+	{
+		do
 		{
-			AIL_pause_stream(mp3Stream[nStream], 1);
-			AIL_close_stream(mp3Stream[nStream]);
-		}
-		
-		if ( nFile == STREAMED_SOUND_RADIO_MP3_PLAYER )
-		{
-			uint32 i = 0;
-			do {
-				if(i != 0 || _bIsMp3Active) {
-					if(++_CurMP3Index >= nNumMP3s) _CurMP3Index = 0;
+			// Just switched to MP3 player
+			if ( !_bIsMp3Active && i == 0 )
+			{
+				if ( nPos > nStreamLength[STREAMED_SOUND_RADIO_MP3_PLAYER] )
+					position = 0;
+				tMP3Entry *e = _pMP3List;
 
-					_CurMP3Pos = 0;
-
-					tMP3Entry *mp3 = _GetMP3EntryByIndex(_CurMP3Index);
-
-					if(mp3) {
-						mp3 = _pMP3List;
-						if(mp3 == NULL) {
-							_bIsMp3Active = false;
-							nFile = 0;
-							strcpy(filename, m_szCDRomRootPath);
-							strcat(filename, StreamedNameTable[nFile]);
-
-							mp3Stream[nStream] =
-							    AIL_open_stream(DIG, filename, 0);
-							if(mp3Stream[nStream]) {
-								AIL_set_stream_loop_count(
-								    mp3Stream[nStream], 1);
-								AIL_set_stream_ms_position(
-								    mp3Stream[nStream], position);
-								AIL_pause_stream(mp3Stream[nStream],
-								                 0);
-								return true;
-							}
-
-							return false;
-						}
-					}
-
-					if(mp3->pLinkPath != NULL)
-						mp3Stream[nStream] =
-						    AIL_open_stream(DIG, mp3->pLinkPath, 0);
-					else {
-						strcpy(filename, _mp3DirectoryPath);
-						strcat(filename, mp3->aFilename);
-
-						mp3Stream[nStream] =
-						    AIL_open_stream(DIG, filename, 0);
-					}
-
-					if(mp3Stream[nStream]) {
+				// Try to continue from previous song, if already started
+				if(!_GetMP3PosFromStreamPos(&position, &e) && !e) {
+					nFile = 0;
+					strcpy(filename, m_szCDRomRootPath);
+					strcat(filename, StreamedNameTable[nFile]);
+					
+					mp3Stream[nStream] = AIL_open_stream(DIG, filename, 0);
+					if ( mp3Stream[nStream] )
+					{
 						AIL_set_stream_loop_count(mp3Stream[nStream], 1);
-						AIL_set_stream_ms_position(mp3Stream[nStream], 0);
+						AIL_set_stream_ms_position(mp3Stream[nStream], position);
 						AIL_pause_stream(mp3Stream[nStream], 0);
 						return true;
 					}
+					return false;
 
-					_bIsMp3Active = false;
-					continue;
-				}
-				if ( nPos > nStreamLength[STREAMED_SOUND_RADIO_MP3_PLAYER] )
-					position = 0;
+				} else {
+					if ( e->pLinkPath != NULL )
+						mp3Stream[nStream] = AIL_open_stream(DIG, e->pLinkPath, 0);
+					else {
+						strcpy(filename, _mp3DirectoryPath);
+						strcat(filename, e->aFilename);
+					
+						mp3Stream[nStream] = AIL_open_stream(DIG, filename, 0);
+					}
+										
+					if ( mp3Stream[nStream] ) {
+						AIL_set_stream_loop_count(mp3Stream[nStream], 1);
+						AIL_set_stream_ms_position(mp3Stream[nStream], position);
+						AIL_pause_stream(mp3Stream[nStream], 0);
+						
+						_bIsMp3Active = true;
 				
-				tMP3Entry *e;
-				if ( !_GetMP3PosFromStreamPos(&position, &e) )
+						return true;
+					}
+					// fall through, start playing from another song
+				}
+			} else {
+				if(++_CurMP3Index >= nNumMP3s) _CurMP3Index = 0;
+
+				_CurMP3Pos = 0;
+
+				tMP3Entry *mp3 = _GetMP3EntryByIndex(_CurMP3Index);
+				if ( !mp3 )
 				{
-					if ( e == NULL )
+					mp3 = _pMP3List;
+					if ( !_pMP3List )
 					{
 						nFile = 0;
+						_bIsMp3Active = 0;
 						strcpy(filename, m_szCDRomRootPath);
 						strcat(filename, StreamedNameTable[nFile]);
-						mp3Stream[nStream] =
-						    AIL_open_stream(DIG, filename, 0);
-						if(mp3Stream[nStream]) {
-							AIL_set_stream_loop_count(
-							    mp3Stream[nStream], 1);
-							AIL_set_stream_ms_position(
-							    mp3Stream[nStream], position);
+						
+						mp3Stream[nStream] = AIL_open_stream(DIG, filename, 0);
+						if ( mp3Stream[nStream] )
+						{
+							AIL_set_stream_loop_count(mp3Stream[nStream], 1);
+							AIL_set_stream_ms_position(mp3Stream[nStream], position);
 							AIL_pause_stream(mp3Stream[nStream], 0);
 							return true;
 						}
-
 						return false;
 					}
 				}
-
-				if ( e->pLinkPath != NULL )
-					mp3Stream[nStream] = AIL_open_stream(DIG, e->pLinkPath, 0);
-				else
-				{
+				if(mp3->pLinkPath != NULL)
+					mp3Stream[nStream] = AIL_open_stream(DIG, mp3->pLinkPath, 0);
+				else {
 					strcpy(filename, _mp3DirectoryPath);
-					strcat(filename, e->aFilename);
-				
-					mp3Stream[nStream] = AIL_open_stream(DIG, filename, 0);
+					strcat(filename, mp3->aFilename);
+
+					mp3Stream[nStream] =
+					    AIL_open_stream(DIG, filename, 0);
 				}
-									
-				if ( mp3Stream[nStream] )
-				{
+
+				if(mp3Stream[nStream]) {
 					AIL_set_stream_loop_count(mp3Stream[nStream], 1);
-					AIL_set_stream_ms_position(mp3Stream[nStream], position);
+					AIL_set_stream_ms_position(mp3Stream[nStream], 0);
 					AIL_pause_stream(mp3Stream[nStream], 0);
-					
+#ifdef FIX_BUGS
 					_bIsMp3Active = true;
-			
+#endif
 					return true;
 				}
-				
-				_bIsMp3Active = false;
 
-			} while(++i < nNumMP3s);
-
-			position = 0;
-			nFile = 0;
+			}
+			_bIsMp3Active = 0;
 		}
-		
-		strcpy(filename, m_szCDRomRootPath);
-		strcat(filename, StreamedNameTable[nFile]);
-		
-		mp3Stream[nStream] = AIL_open_stream(DIG, filename, 0);
-		if ( mp3Stream[nStream] )
-		{
-			AIL_set_stream_loop_count(mp3Stream[nStream], 1);
-			AIL_set_stream_ms_position(mp3Stream[nStream], position);
-			AIL_pause_stream(mp3Stream[nStream], 0);
-			return true;
-		}
+		while ( ++i < nNumMP3s );
+		position = 0;
+		nFile = 0;
 	}
+	strcpy(filename, m_szCDRomRootPath);
+	strcat(filename, StreamedNameTable[nFile]);
 	
+	mp3Stream[nStream] = AIL_open_stream(DIG, filename, 0);
+	if ( mp3Stream[nStream] )
+	{
+		AIL_set_stream_loop_count(mp3Stream[nStream], 1);
+		AIL_set_stream_ms_position(mp3Stream[nStream], position);
+		AIL_pause_stream(mp3Stream[nStream], 0);
+		return true;
+	}
 	return false;
 }
 

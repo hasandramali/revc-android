@@ -1,11 +1,4 @@
 newoption {
-	trigger     = "glewdir",
-	value       = "PATH",
-	description = "Directory of GLEW",
-	default     = "vendor/glew-2.1.0"
-}
-
-newoption {
 	trigger     = "glfwdir64",
 	value       = "PATH",
 	description = "Directory of glfw",
@@ -34,6 +27,11 @@ newoption {
 	description = "Build with opus"
 }
 
+newoption {
+	trigger     = "lto",
+	description = "Use link time optimization"
+}
+
 if(_OPTIONS["with-librw"]) then
 	Librw = "vendor/librw"
 else
@@ -60,7 +58,8 @@ end
 
 workspace "re3"
 	language "C++"
-	configurations { "Debug", "Release" }
+	configurations { "Debug", "Release", "Vanilla" }
+	startproject "re3"
 	location "build"
 	symbols "Full"
 	staticruntime "off"
@@ -107,9 +106,15 @@ workspace "re3"
 	filter "configurations:Debug"
 		defines { "DEBUG" }
 		
-	filter "configurations:Release"
+	filter "configurations:not Debug"
 		defines { "NDEBUG" }
-		optimize "On"
+		optimize "Speed"
+		if(_OPTIONS["lto"]) then
+			flags { "LinkTimeOptimization" }
+		end
+
+	filter "configurations:Vanilla"
+		defines { "VANILLA_DEFINES" }
 
 	filter { "platforms:win*" }
 		system "windows"
@@ -125,11 +130,9 @@ workspace "re3"
 	
 	filter { "platforms:*x86*" }
 		architecture "x86"
-		floatingpoint "Fast"
 		
 	filter { "platforms:*amd64*" }
 		architecture "amd64"
-		floatingpoint "Fast"
 
 	filter { "platforms:*arm*" }
 		architecture "ARM"
@@ -148,7 +151,6 @@ workspace "re3"
 		
 	filter "platforms:*librw_gl3_glfw*"
 		defines { "RW_GL3" }
-		includedirs { path.join(_OPTIONS["glewdir"], "include") }
 		if(not _OPTIONS["with-librw"]) then
 			libdirs { path.join(Librw, "lib/%{getsys(cfg.system)}-%{getarch(cfg.architecture)}-gl3/%{cfg.buildcfg}") }
 		end
@@ -159,16 +161,12 @@ workspace "re3"
 	filter "platforms:*amd64-librw_gl3_glfw*"
 		includedirs { path.join(_OPTIONS["glfwdir64"], "include") }
 
-	filter "platforms:win*librw_gl3_glfw*"
-		defines { "GLEW_STATIC" }
-
 	filter  {}
 		
-    function setpaths (gamepath, exepath, scriptspath)
-       scriptspath = scriptspath or ""
+    function setpaths (gamepath, exepath)
        if (gamepath) then
           postbuildcommands {
-             '{COPY} "%{cfg.buildtarget.abspath}" "' .. gamepath .. scriptspath .. '%{cfg.buildtarget.name}"'
+             '{COPYFILE} "%{cfg.buildtarget.abspath}" "' .. gamepath .. '%{cfg.buildtarget.name}"'
           }
           debugdir (gamepath)
           if (exepath) then
@@ -178,7 +176,6 @@ workspace "re3"
              debugdir (gamepath .. (dir or ""))
           end
        end
-       --targetdir ("bin/%{prj.name}/" .. scriptspath)
     end
 
 if(_OPTIONS["with-librw"]) then
@@ -188,16 +185,16 @@ project "librw"
 	targetdir(path.join(Librw, "lib/%{cfg.platform}/%{cfg.buildcfg}"))
 	files { path.join(Librw, "src/*.*") }
 	files { path.join(Librw, "src/*/*.*") }
+	files { path.join(Librw, "src/gl/*/*.*") }
 	
 	filter { "platforms:*x86*" }
 		architecture "x86"
-		floatingpoint "Fast"
 
 	filter { "platforms:*amd64*" }
 		architecture "amd64"
-		floatingpoint "Fast"
 
 	filter "platforms:win*"
+		defines { "_CRT_SECURE_NO_WARNINGS", "_CRT_NONSTDC_NO_DEPRECATE" }
 		staticruntime "on"
 		buildoptions { "/Zc:sizedDealloc-" }
 
@@ -229,11 +226,16 @@ project "re3"
 	targetname "re3"
 	targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
 
+	if(_OPTIONS["with-librw"]) then
+		dependson "librw"
+	end
+
 	files { addSrcFiles("src") }
 	files { addSrcFiles("src/animation") }
 	files { addSrcFiles("src/audio") }
 	files { addSrcFiles("src/audio/eax") }
 	files { addSrcFiles("src/audio/oal") }
+	files { addSrcFiles("src/buildings") }
 	files { addSrcFiles("src/collision") }
 	files { addSrcFiles("src/control") }
 	files { addSrcFiles("src/core") }
@@ -251,12 +253,14 @@ project "re3"
 	files { addSrcFiles("src/vehicles") }
 	files { addSrcFiles("src/weapons") }
 	files { addSrcFiles("src/extras") }
+	files { "src/extras/GitSHA1.cpp" } -- this won't be in repo in first build
 
 	includedirs { "src" }
 	includedirs { "src/animation" }
 	includedirs { "src/audio" }
 	includedirs { "src/audio/eax" }
 	includedirs { "src/audio/oal" }
+	includedirs { "src/buildings" }
 	includedirs { "src/collision" }
 	includedirs { "src/control" }
 	includedirs { "src/core" }
@@ -283,8 +287,8 @@ project "re3"
 
 	filter "platforms:*mss"
 		defines { "AUDIO_MSS" }
-		includedirs { "sdk/milessdk/include" }
-		libdirs { "sdk/milessdk/lib" }
+		includedirs { "vendor/milessdk/include" }
+		libdirs { "vendor/milessdk/lib" }
 	
 	if _OPTIONS["with-opus"] then
 		filter "platforms:win*"
@@ -300,7 +304,7 @@ project "re3"
 	
 	filter {}
 	if(os.getenv("GTA_III_RE_DIR")) then
-		setpaths("$(GTA_III_RE_DIR)/", "%(cfg.buildtarget.name)", "")
+		setpaths(os.getenv("GTA_III_RE_DIR") .. "/", "%(cfg.buildtarget.name)")
 	end
 	
 	filter "platforms:win*"
@@ -314,6 +318,10 @@ project "re3"
 			-- external librw is dynamic
 			staticruntime "on"
 		end
+		prebuildcommands { '"%{prj.location}..\\printHash.bat" "%{prj.location}..\\src\\extras\\GitSHA1.cpp"' }
+	
+	filter "platforms:not win*"
+		prebuildcommands { '"%{prj.location}/../printHash.sh" "%{prj.location}/../src/extras/GitSHA1.cpp"' }
 
 	filter "platforms:win*glfw*"
 		staticruntime "off"
@@ -334,10 +342,10 @@ project "re3"
 		libdirs { "vendor/openal-soft/libs/Win64" }
 
 	filter "platforms:linux*oal"
-		links { "openal", "mpg123", "sndfile", "pthread" }
+		links { "openal", "mpg123", "sndfile", "pthread", "X11" }
 		
 	filter "platforms:bsd*oal"
-		links { "openal", "mpg123", "sndfile", "pthread" }
+		links { "openal", "mpg123", "sndfile", "pthread", "X11" }
 
 	filter "platforms:macosx*oal"
 		links { "openal", "mpg123", "sndfile", "pthread" }
@@ -354,7 +362,7 @@ project "re3"
 	filter "platforms:*RW33*"
 		includedirs { "sdk/rwsdk/include/d3d8" }
 		libdirs { "sdk/rwsdk/lib/d3d8/release" }
-		links { "rwcore", "rpworld", "rpmatfx", "rpskin", "rphanim", "rtbmp", "rtquat", "rtcharse" }
+		links { "rwcore", "rpworld", "rpmatfx", "rpskin", "rphanim", "rtbmp", "rtquat", "rtcharse", "rpanisot" }
 		defines { "RWLIBS" }
 		linkoptions "/SECTION:_rwcseg,ER!W /MERGE:_rwcseg=.text"
 	
@@ -377,25 +385,23 @@ project "re3"
 		libdirs { "sdk/dx8sdk/lib" }
 		
 	filter "platforms:win-x86*gl3_glfw*"
-		libdirs { path.join(_OPTIONS["glewdir"], "lib/Release/Win32") }
 		libdirs { path.join(_OPTIONS["glfwdir32"], "lib-" .. string.gsub(_ACTION or '', "vs", "vc")) }
-		links { "opengl32", "glew32s", "glfw3" }
+		links { "opengl32", "glfw3" }
 		
 	filter "platforms:win-amd64*gl3_glfw*"
-		libdirs { path.join(_OPTIONS["glewdir"], "lib/Release/x64") }
 		libdirs { path.join(_OPTIONS["glfwdir64"], "lib-" .. string.gsub(_ACTION or '', "vs", "vc")) }
-		links { "opengl32", "glew32s", "glfw3" }
+		links { "opengl32", "glfw3" }
 
 	filter "platforms:linux*gl3_glfw*"
-		links { "GL", "GLEW", "glfw" }
+		links { "GL", "glfw" }
 		
 	filter "platforms:bsd*gl3_glfw*"
-		links { "GL", "GLEW", "glfw", "sysinfo" }
+		links { "GL", "glfw", "sysinfo" }
 		includedirs { "/usr/local/include" }
 		libdirs { "/usr/local/lib" }
 
 	filter "platforms:macosx*gl3_glfw*"
-		links { "GLEW", "glfw" }
+		links { "glfw" }
 		linkoptions { "-framework OpenGL" }
 		includedirs { "/opt/local/include" }
 		includedirs { "/usr/local/include" }

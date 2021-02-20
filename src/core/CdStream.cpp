@@ -5,9 +5,7 @@
 #include "CdStream.h"
 #include "rwcore.h"
 #include "RwHelper.h"
-
-#define CDDEBUG(f, ...)   debug ("%s: " f "\n", "cdvd_stream", ## __VA_ARGS__)
-#define CDTRACE(f, ...)   printf("%s: " f "\n", "cdvd_stream", ## __VA_ARGS__)
+#include "MemoryMgr.h"
 
 struct CdReadInfo
 {
@@ -16,9 +14,9 @@ struct CdReadInfo
 	void *pBuffer;
 	char field_C;
 	bool bLocked;
-	bool bInUse;
+	bool bReading;
 	int32 nStatus;
-	HANDLE hSemaphore; // used for CdStreamSync
+	HANDLE pDoneSemaphore; // used for CdStreamSync
 	HANDLE hFile;
 	OVERLAPPED Overlapped;
 };
@@ -55,11 +53,11 @@ CdStreamInitThread(void)
 	{
 		for ( int32 i = 0; i < gNumChannels; i++ )
 		{
-			gpReadInfo[i].hSemaphore = CreateSemaphore(nil, 0, 2, nil);
+			gpReadInfo[i].pDoneSemaphore = CreateSemaphore(nil, 0, 2, nil);
 			
-			if ( gpReadInfo[i].hSemaphore == nil )
+			if ( gpReadInfo[i].pDoneSemaphore == nil )
 			{
-				CDTRACE("failed to create sync semaphore");
+				printf("%s: failed to create sync semaphore\n", "cdvd_stream");
 				ASSERT(0);
 				return;
 			}
@@ -72,11 +70,15 @@ CdStreamInitThread(void)
 	gChannelRequestQ.size = gNumChannels + 1;
 	ASSERT(gChannelRequestQ.items != nil );
 	
+#ifdef FIX_BUGS
+	gCdStreamSema = CreateSemaphore(nil, 0, 5, nil);
+#else
 	gCdStreamSema = CreateSemaphore(nil, 0, 5, "CdStream");
+#endif
 	
 	if ( gCdStreamSema == nil )
 	{
-		CDTRACE("failed to create stream semaphore");
+		printf("%s: failed to create stream semaphore\n", "cdvd_stream");
 		ASSERT(0);
 		return;
 	}
@@ -85,7 +87,7 @@ CdStreamInitThread(void)
 	
 	if ( _gCdStreamThread == nil )
 	{
-		CDTRACE("failed to create streaming thread");
+		printf("%s: failed to create streaming thread\n", "cdvd_stream");
 		ASSERT(0);
 		return;
 	}
@@ -133,7 +135,7 @@ CdStreamInit(int32 numChannels)
 	gpReadInfo = (CdReadInfo *)LocalAlloc(LMEM_ZEROINIT, sizeof(CdReadInfo) * numChannels);
 	ASSERT( gpReadInfo != nil );
 	
-	CDDEBUG("read info %p", gpReadInfo);
+	debug("%s: read info %p\n", "cdvd_stream", gpReadInfo);
 	
 	CdStreamAddImage("MODELS\\GTA3.IMG");
 	
@@ -181,7 +183,7 @@ CdStreamShutdown(void)
 		CloseHandle(_gCdStreamThread);
 		
 		for ( int32 i = 0; i < gNumChannels; i++ )
-			CloseHandle(gpReadInfo[i].hSemaphore);
+			CloseHandle(gpReadInfo[i].pDoneSemaphore);
 	}
 	
 	LocalFree(gpReadInfo);
@@ -211,7 +213,7 @@ CdStreamRead(int32 channel, void *buffer, uint32 offset, uint32 size)
 	
 	if ( _gbCdStreamAsync )
 	{
-		if ( pChannel->nSectorsToRead != 0 || pChannel->bInUse )
+		if ( pChannel->nSectorsToRead != 0 || pChannel->bReading )
 			return STREAM_NONE;
 		
 		pChannel->nStatus = STREAM_NONE;
@@ -269,7 +271,7 @@ CdStreamGetStatus(int32 channel)
 	
 	if ( _gbCdStreamAsync )
 	{
-		if ( pChannel->bInUse )
+		if ( pChannel->bReading )
 			return STREAM_READING;
 		
 		if ( pChannel->nSectorsToRead != 0 )
@@ -319,12 +321,21 @@ CdStreamSync(int32 channel)
 		{
 			pChannel->bLocked = true;
 
-			ASSERT( pChannel->hSemaphore != nil );
+			ASSERT( pChannel->pDoneSemaphore != nil );
 
-			WaitForSingleObject(pChannel->hSemaphore, INFINITE);
+			// Deadlock fix 1
+#ifdef FIX_BUGS
+			// This is while loop on Posix streamer, for spurious wakeups
+			if (pChannel->bLocked && pChannel->nSectorsToRead != 0){
+				WaitForSingleObject(pChannel->pDoneSemaphore, INFINITE);
+			}
+			pChannel->bLocked = false;
+#else
+			WaitForSingleObject(pChannel->pDoneSemaphore, INFINITE);
+#endif
 		}
 
-		pChannel->bInUse = false;
+		pChannel->bReading = false;
 		
 		return pChannel->nStatus;
 	}
@@ -396,7 +407,7 @@ WINAPI CdStreamThread(LPVOID lpThreadParameter)
 		CdReadInfo *pChannel = &gpReadInfo[channel];
 		ASSERT( pChannel != nil );
 		
-		pChannel->bInUse = true;
+		pChannel->bReading = true;
 		
 		if ( pChannel->nStatus == STREAM_NONE )
 		{
@@ -453,11 +464,15 @@ WINAPI CdStreamThread(LPVOID lpThreadParameter)
 		
 		if ( pChannel->bLocked )
 		{
-			ASSERT( pChannel->hSemaphore != nil );
-			ReleaseSemaphore(pChannel->hSemaphore, 1, NULL);
+			ASSERT( pChannel->pDoneSemaphore != nil );
+			// Deadlock fix 2
+#ifdef FIX_BUGS
+			pChannel->bLocked = 0;
+#endif
+			ReleaseSemaphore(pChannel->pDoneSemaphore, 1, NULL);
 		}
 		
-		pChannel->bInUse = false;
+		pChannel->bReading = false;
 	}
 }
 

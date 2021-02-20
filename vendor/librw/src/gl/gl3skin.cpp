@@ -12,9 +12,7 @@
 #include "../rwobjects.h"
 #include "../rwanim.h"
 #include "../rwplugins.h"
-#ifdef RW_OPENGL
-#include <GL/glew.h>
-#endif
+
 #include "rwgl3.h"
 #include "rwgl3shader.h"
 #include "rwgl3plg.h"
@@ -257,16 +255,11 @@ skinRenderCB(Atomic *atomic, InstanceDataHeader *header)
 {
 	Material *m;
 
+	uint32 flags = atomic->geometry->flags;
 	setWorldMatrix(atomic->getFrame()->getLTM());
 	lightingCB(atomic);
 
-#ifdef RW_GL_USE_VAOS
-	glBindVertexArray(header->vao);
-#else
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, header->ibo);
-	glBindBuffer(GL_ARRAY_BUFFER, header->vbo);
-	setAttribPointers(header->attribDesc, header->numAttribs);
-#endif
+	setupVertexInput(header);
 
 	InstanceData *inst = header->inst;
 	int32 n = header->numMeshes;
@@ -278,7 +271,7 @@ skinRenderCB(Atomic *atomic, InstanceDataHeader *header)
 	while(n--){
 		m = inst->material;
 
-		setMaterial(m->color, m->surfaceProps);
+		setMaterial(flags, m->color, m->surfaceProps);
 
 		setTexture(0, m->texture);
 
@@ -287,9 +280,7 @@ skinRenderCB(Atomic *atomic, InstanceDataHeader *header)
 		drawInst(header, inst);
 		inst++;
 	}
-#ifndef RW_GL_USE_VAOS
-	disableAttribPointers(header->attribDesc, header->numAttribs);
-#endif
+	teardownVertexInput(header);
 }
 
 static void*

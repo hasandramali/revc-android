@@ -60,7 +60,11 @@ enum
 // NB: removed explicit TheCamera from all functions
 
 CCamera TheCamera;
+#ifdef PC_PLAYER_CONTROLS
 bool CCamera::m_bUseMouse3rdPerson = true;
+#else
+bool CCamera::m_bUseMouse3rdPerson = false;
+#endif
 bool bDidWeProcessAnyCinemaCam;
 
 #ifdef IMPROVED_CAMERA
@@ -74,7 +78,7 @@ bool bDidWeProcessAnyCinemaCam;
 
 CCamera::CCamera(void)
 {
-#if defined(GTA3_1_1_PATCH) || defined(FIX_BUGS)
+#if GTA_VERSION >= GTA3_PC_11 || defined(FIX_BUGS)
 	m_fMouseAccelHorzntl = 0.0025f;
 	m_fMouseAccelVertical = 0.003f;
 #endif
@@ -88,15 +92,15 @@ CCamera::CCamera(float)
 void
 CCamera::Init(void)
 {
-#if defined(GTA3_1_1_PATCH) || defined(FIX_BUGS)
+#if GTA_VERSION >= GTA3_PC_11 || defined(FIX_BUGS)
 	float fMouseAccelHorzntl = m_fMouseAccelHorzntl;
 	float fMouseAccelVertical = m_fMouseAccelVertical;
 #endif
 
 #ifdef PS2_MENU
-	if ( !TheMemoryCard.m_bWantToLoad && !FrontEndMenuManager.m_bWantToRestart ) {
+	if ( !TheMemoryCard.m_bWantToLoad && !FrontEndMenuManager.m_bWantToRestart )
 #endif
-	
+	{
 	#ifdef FIX_BUGS
 		static const CCamera DummyCamera = CCamera(0.f);
 		*this = DummyCamera;
@@ -104,15 +108,13 @@ CCamera::Init(void)
 		memset(this, 0, sizeof(CCamera));	// getting rid of vtable, eh?
 	#endif
 	
-	#if defined(GTA3_1_1_PATCH) || defined(FIX_BUGS)
+	#if GTA_VERSION >= GTA3_PC_11 || defined(FIX_BUGS)
 		m_fMouseAccelHorzntl = fMouseAccelHorzntl;
 		m_fMouseAccelVertical = fMouseAccelVertical;
 	#endif
 		m_pRwCamera = nil;
 	
-#ifdef PS2_MENU
 	}
-#endif
 	
 	m_1rstPersonRunCloseToAWall = false;
 	m_fPositionAlongSpline = 0.0f;
@@ -237,7 +239,7 @@ CCamera::Init(void)
 	m_uiTransitionState = 0;
 	m_uiTimeTransitionStart = 0;
 	m_bLookingAtPlayer = true;
-#if !defined(GTA3_1_1_PATCH) && !defined(FIX_BUGS)
+#if GTA_VERSION < GTA3_PC_11 && !defined(FIX_BUGS)
 	m_fMouseAccelHorzntl = 0.0025f;
 	m_fMouseAccelVertical = 0.003f;
 #endif
@@ -715,14 +717,18 @@ CCamera::Process(void)
 		DistanceToWater = CWaterLevel::CalcDistanceToWater(GetPosition().x, GetPosition().y);
 
 	// LOD dist
-	if(!CCutsceneMgr::IsRunning() || CCutsceneMgr::UseLodMultiplier())
-		LODDistMultiplier = 70.0f/CDraw::GetFOV() * CDraw::GetAspectRatio()/(4.0f/3.0f);
-	else
+	if(!CCutsceneMgr::IsRunning() || CCutsceneMgr::UseLodMultiplier()){
+		LODDistMultiplier = 70.0f/CDraw::GetFOV();
+#ifndef FIX_BUGS
+		// makes no sense and gone in VC
+		LODDistMultiplier *= CDraw::GetAspectRatio()/(4.0f/3.0f);
+#endif
+	}else
 		LODDistMultiplier = 1.0f;
-	// missing on PS2
+#if GTA_VERSION > GTA3_PS2_160
 	GenerationDistMultiplier = LODDistMultiplier;
 	LODDistMultiplier *= CRenderer::ms_lodDistScale;
-	//
+#endif
 
 	// Keep track of speed
 	if(m_bJustInitalised || m_bJust_Switched){
@@ -1574,8 +1580,10 @@ CCamera::CamControl(void)
 					switchByJumpCut = true;
 			}
 		}
+#ifdef GTA_SCENE_EDIT
 		if(CSceneEdit::m_bEditOn)
 			ReqMode = CCam::MODE_EDITOR;
+#endif
 
 		if((m_uiTransitionState == 0 || switchByJumpCut) && ReqMode != Cams[ActiveCam].Mode){
 			if(switchByJumpCut){
@@ -2204,7 +2212,7 @@ CCamera::StartTransition(int16 newMode)
 		while(deltaBeta < -PI) deltaBeta += 2*PI;
 		deltaBeta = Abs(deltaBeta);
 
-		door = FindPlayerPed()->m_vehEnterType;
+		door = FindPlayerPed()->m_vehDoor;
 		if(deltaBeta > HALFPI){
 			if(((CPed*)pTargetEntity)->m_carInObjective){
 				if(((CPed*)pTargetEntity)->m_carInObjective->IsUpsideDown()){
@@ -2285,7 +2293,7 @@ CCamera::StartTransition(int16 newMode)
 		}
 #endif
 
-		door = FindPlayerPed()->m_vehEnterType;
+		door = FindPlayerPed()->m_vehDoor;
 		if(deltaBeta > HALFPI){
 			if(((CVehicle*)pTargetEntity)->IsUpsideDown()){
 				if(door == CAR_DOOR_LF || door == CAR_DOOR_LR)	// BUG: game checks LF twice
@@ -2775,7 +2783,7 @@ CCamera::TryToStartNewCamMode(int obbeMode)
 		if (CReplay::IsPlayingBack())
 			return false;
 #endif
-		if(FindPlayerPed()->m_pWanted->m_nWantedLevel < 1)
+		if(FindPlayerPed()->m_pWanted->GetWantedLevel() < 1)
 			return false;
 		if(FindPlayerVehicle() == nil)
 			return false;
@@ -2803,7 +2811,7 @@ CCamera::TryToStartNewCamMode(int obbeMode)
 		if (CReplay::IsPlayingBack())
 			return false;
 #endif
-		if(FindPlayerPed()->m_pWanted->m_nWantedLevel < 1)
+		if(FindPlayerPed()->m_pWanted->GetWantedLevel() < 1)
 			return false;
 		if(FindPlayerVehicle() == nil)
 			return false;
@@ -2978,12 +2986,12 @@ CCamera::LoadTrainCamNodes(char const *name)
 	char token[16] = { 0 };
 	char filename[16] = { 0 };
 	uint8 *buf;
-	size_t bufpos = 0;
+	ssize_t bufpos = 0;
 	int field = 0;
 	int tokpos = 0;
 	char c;
 	int i;
-	size_t len;
+	ssize_t len;
 
 	strcpy(filename, name);
 	len = (int)strlen(filename);
@@ -3621,9 +3629,17 @@ CCamera::CalculateDerivedValues(void)
 bool
 CCamera::IsPointVisible(const CVector &center, const CMatrix *mat)
 {
-	RwV3d c;
-	c = center;
-	RwV3dTransformPoints(&c, &c, 1, &mat->m_matrix);
+#ifdef GTA_PS2
+	CVuVector c;
+	TransformPoint(c, *mat, center);
+#else
+	CVector c = center;
+	#ifdef FIX_BUGS
+		c = *mat * center;
+	#else
+		RwV3dTransformPoints(&c, &c, 1, (RwMatrix*)mat);
+	#endif
+#endif
 	if(c.y < CDraw::GetNearClipZ()) return false;
 	if(c.y > CDraw::GetFarClipZ()) return false;
 	if(c.x*m_vecFrustumNormals[0].x + c.y*m_vecFrustumNormals[0].y > 0.0f) return false;
@@ -3636,9 +3652,17 @@ CCamera::IsPointVisible(const CVector &center, const CMatrix *mat)
 bool
 CCamera::IsSphereVisible(const CVector &center, float radius, const CMatrix *mat)
 {
-	RwV3d c;
-	c = center;
-	RwV3dTransformPoints(&c, &c, 1, &mat->m_matrix);
+#ifdef GTA_PS2
+	CVuVector c;
+	TransformPoint(c, *mat, center);
+#else
+	CVector c = center;
+	#ifdef FIX_BUGS
+		c = *mat * center;
+	#else
+		RwV3dTransformPoints(&c, &c, 1, (RwMatrix*)mat);
+	#endif
+#endif
 	if(c.y + radius < CDraw::GetNearClipZ()) return false;
 	if(c.y - radius > CDraw::GetFarClipZ()) return false;
 	if(c.x*m_vecFrustumNormals[0].x + c.y*m_vecFrustumNormals[0].y > radius) return false;
@@ -3656,11 +3680,24 @@ CCamera::IsSphereVisible(const CVector &center, float radius)
 }
 
 bool
-CCamera::IsBoxVisible(RwV3d *box, const CMatrix *mat)
+#ifdef GTA_PS2
+CCamera::IsBoxVisible(CVuVector *box, const CMatrix *mat)
+#else
+CCamera::IsBoxVisible(CVector *box, const CMatrix *mat)
+#endif
 {
 	int i;
 	int frustumTests[6] = { 0 };
-	RwV3dTransformPoints(box, box, 8, &mat->m_matrix);
+#ifdef GTA_PS2
+	TransformPoints(box, 8, *mat, box);
+#else
+	#ifdef FIX_BUGS
+		for (i = 0; i < 8; i++)
+			box[i] = *mat * box[i];
+	#else
+		RwV3dTransformPoints(box, box, 8, (RwMatrix*)mat);
+	#endif
+#endif
 
 	for(i = 0; i < 8; i++){
 		if(box[i].y < CDraw::GetNearClipZ()) frustumTests[0]++;

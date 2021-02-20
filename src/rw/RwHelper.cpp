@@ -1,7 +1,6 @@
-#if defined RW_D3D9 || defined RWLIBS
 #define WITHD3D
-#endif
 #include "common.h"
+#include <rpskin.h>
 
 #include "RwHelper.h"
 #include "Timecycle.h"
@@ -12,6 +11,7 @@
 #endif
 #ifndef FINAL
 RtCharset *debugCharset;
+bool bDebugRenderGroups;
 #endif
 
 #ifdef PS2_ALPHA_TEST
@@ -64,45 +64,6 @@ void FlushObrsPrintfs()
 #endif
 }
 
-void *
-RwMallocAlign(RwUInt32 size, RwUInt32 align)
-{
-#ifdef FIX_BUGS
-	uintptr ptralign = align-1;
-	void *mem = (void *)malloc(size + sizeof(uintptr) + ptralign);
-
-	ASSERT(mem != nil);
-
-	void *addr = (void *)((((uintptr)mem) + sizeof(uintptr) + ptralign) & ~ptralign);
-
-	ASSERT(addr != nil);
-#else
-	void *mem = (void *)malloc(size + align);
-
-	ASSERT(mem != nil);
-
-	void *addr = (void *)((((uintptr)mem) + align) & ~(align - 1));
-
-	ASSERT(addr != nil);
-#endif
-
-	*(((void **)addr) - 1) = mem;
-
-	return addr;
-}
-
-void
-RwFreeAlign(void *mem)
-{
-	ASSERT(mem != nil);
-
-	void *addr = *(((void **)mem) - 1);
-
-	ASSERT(addr != nil);
-
-	free(addr);
-}
-
 void
 DefinedState(void)
 {
@@ -152,6 +113,36 @@ SetCullMode(uint32 mode)
 	else
 		RwRenderStateSet(rwRENDERSTATECULLMODE, (void*)rwCULLMODECULLNONE);
 }
+
+#ifndef FINAL
+void
+PushRendergroup(const char *name)
+{
+	if(!bDebugRenderGroups)
+		return;
+#if defined(RW_OPENGL)
+	if(GLAD_GL_KHR_debug)
+		glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, name);
+#elif defined(RW_D3D9)
+	static WCHAR tmp[256];
+	MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, name, -1, tmp, sizeof(tmp));
+	D3DPERF_BeginEvent(0xFFFFFFFF, tmp);
+#endif
+}
+
+void
+PopRendergroup(void)
+{
+	if(!bDebugRenderGroups)
+		return;
+#if defined(RW_OPENGL)
+	if(GLAD_GL_KHR_debug)
+		glPopDebugGroup();
+#elif defined(RW_D3D9)
+	D3DPERF_EndEvent();
+#endif
+}
+#endif
 
 RwFrame*
 GetFirstFrameCallback(RwFrame *child, void *data)
@@ -329,7 +320,8 @@ SkinGetBonePositionsToTable(RpClump *clump, RwV3d *boneTable)
 			parent = stack[sp--];
 		else
 			parent = i;
-		assert(parent >= 0 && parent < numBones);
+
+		//assert(parent >= 0 && parent < numBones);
 	}
 }
 
@@ -337,7 +329,7 @@ RpHAnimAnimation*
 HAnimAnimationCreateForHierarchy(RpHAnimHierarchy *hier)
 {
 	int i;
-#ifdef FIX_BUGS
+#if defined FIX_BUGS || defined LIBRW
 	int numNodes = hier->numNodes*2;	// you're supposed to have at least two KFs per node
 #else
 	int numNodes = hier->numNodes;
@@ -351,7 +343,7 @@ HAnimAnimationCreateForHierarchy(RpHAnimHierarchy *hier)
 		frame->q.real = 1.0f;
 		frame->q.imag.x = frame->q.imag.y = frame->q.imag.z = 0.0f;
 		frame->t.x = frame->t.y = frame->t.z = 0.0f;
-#ifdef FIX_BUGS
+#if defined FIX_BUGS || defined LIBRW
 		// times are subtracted and divided giving NaNs
 		// so they can't both be 0
 		frame->time = i/hier->numNodes;
@@ -361,26 +353,6 @@ HAnimAnimationCreateForHierarchy(RpHAnimHierarchy *hier)
 		frame->prevFrame = nil;
 	}
 	return anim;
-}
-
-RpAtomic*
-AtomicRemoveAnimFromSkinCB(RpAtomic *atomic, void *data)
-{
-	if(RpSkinGeometryGetSkin(RpAtomicGetGeometry(atomic))){
-		RpHAnimHierarchy *hier = RpSkinAtomicGetHAnimHierarchy(atomic);
-#ifdef LIBRW
-		if(hier && hier->interpolator->currentAnim){
-			RpHAnimAnimationDestroy(hier->interpolator->currentAnim);
-			hier->interpolator->currentAnim = nil;
-		}
-#else
-		if(hier && hier->pCurrentAnim){
-			RpHAnimAnimationDestroy(hier->pCurrentAnim);
-			hier->pCurrentAnim = nil;
-		}
-#endif
-	}
-	return atomic;
 }
 
 void
@@ -459,7 +431,7 @@ CameraSize(RwCamera * camera, RwRect * rect,
 			RwRaster           *zRaster;
 
 			// BUG: game just changes camera raster's sizes, but this is a hack
-#ifdef FIX_BUGS
+#if defined FIX_BUGS || defined LIBRW
 			/*
 			 * Destroy rasters...
 			 */
@@ -643,11 +615,6 @@ CameraCreate(RwInt32 width, RwInt32 height, RwBool zBuffer)
 	CameraDestroy(camera);
 	return (nil);
 }
-
-#ifdef USE_TEXTURE_POOL
-WRAPPER void _TexturePoolsInitialise() { EAXJMP(0x598B10); }
-WRAPPER void _TexturePoolsShutdown() { EAXJMP(0x598B30); }
-#endif
 
 #ifdef LIBRW
 #include <rpmatfx.h>

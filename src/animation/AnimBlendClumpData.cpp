@@ -1,13 +1,13 @@
 #include "common.h"
 
 #include "AnimBlendClumpData.h"
-#include "RwHelper.h"
+#include "MemoryMgr.h"
 
 
 CAnimBlendClumpData::CAnimBlendClumpData(void)
 {
 	numFrames = 0;
-	velocity = nil;
+	velocity2d = nil;
 	frames = nil;
 	link.Init();
 }

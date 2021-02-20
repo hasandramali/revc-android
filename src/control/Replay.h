@@ -61,7 +61,11 @@ struct CStoredDetailedAnimationState
 	uint16 aFlags2[NUM_PARTIAL_ANIMS_IN_REPLAY];
 };
 
-void PlayReplayFromHD(void);
+#ifdef GTA_REPLAY
+#define REPLAY_STUB
+#else
+#define REPLAY_STUB {}
+#endif
 
 class CReplay
 {
@@ -269,24 +273,33 @@ private:
 	static float fAlphaAngleLookAroundCam;
 	static float fBetaAngleLookAroundCam;
 #ifdef FIX_BUGS
+	static uint8* pGarages;
+	static CFire* FireArray;
+	static uint32 NumOfFires;
+	static uint8* paProjectileInfo;
+	static uint8* paProjectiles;
 	static int nHandleOfPlayerPed[NUMPLAYERS];
 #endif
 
 public:
-	static void Init(void);
-	static void DisableReplays(void);
-	static void EnableReplays(void);
-	static void Update(void);
-	static void FinishPlayback(void);
-	static void EmptyReplayBuffer(void);
-	static void Display(void);
-	static void TriggerPlayback(uint8 cam_mode, float cam_x, float cam_y, float cam_z, bool load_scene);
-	static void StreamAllNecessaryCarsAndPeds(void);
-	static bool ShouldStandardCameraBeProcessed(void);
+	static void Init(void) REPLAY_STUB;
+	static void DisableReplays(void) REPLAY_STUB;
+	static void EnableReplays(void) REPLAY_STUB;
+	static void Update(void) REPLAY_STUB;
+	static void FinishPlayback(void) REPLAY_STUB;
+	static void EmptyReplayBuffer(void) REPLAY_STUB;
+	static void Display(void) REPLAY_STUB;
+	static void TriggerPlayback(uint8 cam_mode, float cam_x, float cam_y, float cam_z, bool load_scene) REPLAY_STUB;
+	static void StreamAllNecessaryCarsAndPeds(void) REPLAY_STUB;
 
+#ifndef GTA_REPLAY
+	static bool ShouldStandardCameraBeProcessed(void) { return true; }
+	static bool IsPlayingBack() { return false; }
+	static bool IsPlayingBackFromFile() { return false; }
+#else
+	static bool ShouldStandardCameraBeProcessed(void);
 	static bool IsPlayingBack() { return Mode == MODE_PLAYBACK; }
 	static bool IsPlayingBackFromFile() { return bPlayingBackFromFile; }
-
 private:
 	static void RecordThisFrame(void);
 	static void StorePedUpdate(CPed *ped, int id);
@@ -308,10 +321,9 @@ private:
 	static void EmptyAllPools(void);
 	static void MarkEverythingAsNew(void);
 	static void SaveReplayToHD(void);
+	static void PlayReplayFromHD(void); // out of class in III PC and later because of SecuROM
 	static void FindFirstFocusCoordinate(CVector *coord);
 	static void ProcessLookAroundCam(void);
 	static size_t FindSizeOfPacket(uint8);
-
-	/* Absolute nonsense, but how could this function end up being outside of class? */
-	friend void PlayReplayFromHD(void); 
+#endif
 };

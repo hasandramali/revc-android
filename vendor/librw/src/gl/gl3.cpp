@@ -9,9 +9,7 @@
 #include "../rwpipeline.h"
 #include "../rwobjects.h"
 #include "../rwengine.h"
-#ifdef RW_OPENGL
-#include <GL/glew.h>
-#endif
+
 #include "rwgl3.h"
 #include "rwgl3shader.h"
 
@@ -35,6 +33,7 @@ driverOpen(void *o, int32, int32)
 	engine->driver[PLATFORM_GL3]->rasterNumLevels    = rasterNumLevels;
 	engine->driver[PLATFORM_GL3]->imageFindRasterFormat = imageFindRasterFormat;
 	engine->driver[PLATFORM_GL3]->rasterFromImage    = rasterFromImage;
+	engine->driver[PLATFORM_GL3]->rasterToImage      = rasterToImage;
 
 	return o;
 }

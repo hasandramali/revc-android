@@ -11,12 +11,7 @@
 #include "../rwpipeline.h"
 #include "../rwobjects.h"
 #ifdef RW_OPENGL
-#include <GL/glew.h>
-#ifdef LIBRW_SDL2
-#include <SDL.h>
-#else
-#include <GLFW/glfw3.h>
-#endif
+
 #include "rwgl3.h"
 #include "rwgl3shader.h"
 #include "rwgl3impl.h"
@@ -25,39 +20,8 @@
 
 namespace rw {
 namespace gl3 {
-#ifndef LIBRW_SDL2
-struct DisplayMode
-{
-	GLFWvidmode mode;
-	int32 depth;
-	uint32 flags;
-};
-#endif
 
-struct GlGlobals
-{
-#ifdef LIBRW_SDL2
-	SDL_Window *window;
-	SDL_GLContext glcontext;
-#else
-	GLFWwindow *window;
-
-	GLFWmonitor *monitor;
-	int numMonitors;
-	int currentMonitor;
-
-	DisplayMode *modes;
-	int numModes;
-	int currentMode;
-	GLFWwindow **pWindow;
-#endif
-	int presentWidth, presentHeight;
-	int presentOffX, presentOffY;
-
-	// for opening the window
-	int winWidth, winHeight;
-	const char *winTitle;
-} glGlobals;
+GlGlobals glGlobals;
 
 Gl3Caps gl3Caps;
 // terrible hack for GLES
@@ -107,6 +71,7 @@ struct GLShaderState
 {
 	RGBA matColor;
 	SurfaceProperties surfProps;
+	float extraSurfProp;
 };
 
 const char *shaderDecl120 =
@@ -209,6 +174,14 @@ struct RwStateCache {
 	uint32 zwrite;
 	uint32 ztest;
 	uint32 cullmode;
+	uint32 stencilenable;
+	uint32 stencilpass;
+	uint32 stencilfail;
+	uint32 stencilzfail;
+	uint32 stencilfunc;
+	uint32 stencilref;
+	uint32 stencilmask;
+	uint32 stencilwritemask;
 	uint32 fogEnable;
 	float32 fogStart;
 	float32 fogEnd;
@@ -232,6 +205,14 @@ enum
 	RWGL_DEPTHMASK,
 	RWGL_CULL,
 	RWGL_CULLFACE,
+	RWGL_STENCIL,
+	RWGL_STENCILFUNC,
+	RWGL_STENCILFAIL,
+	RWGL_STENCILZFAIL,
+	RWGL_STENCILPASS,
+	RWGL_STENCILREF,
+	RWGL_STENCILMASK,
+	RWGL_STENCILWRITEMASK,
 
 	// uniforms
 	RWGL_ALPHAFUNC,
@@ -256,6 +237,18 @@ struct GlState {
 
 	bool32 cullEnable;
 	uint32 cullFace;
+
+	bool32 stencilEnable;
+	// glStencilFunc
+	uint32 stencilFunc;
+	uint32 stencilRef;
+	uint32 stencilMask;
+	// glStencilOp
+	uint32 stencilPass;
+	uint32 stencilFail;
+	uint32 stencilZFail;
+	// glStencilMask
+	uint32 stencilWriteMask;
 };
 static GlState curGlState, oldGlState;
 
@@ -279,6 +272,30 @@ static uint32 blendMap[] = {
 	GL_SRC_ALPHA_SATURATE,
 };
 
+static uint32 stencilOpMap[] = {
+	GL_KEEP,	// actually invalid
+	GL_KEEP,
+	GL_ZERO,
+	GL_REPLACE,
+	GL_INCR,
+	GL_DECR,
+	GL_INVERT,
+	GL_INCR_WRAP,
+	GL_DECR_WRAP
+};
+
+static uint32 stencilFuncMap[] = {
+	GL_NEVER,	// actually invalid
+	GL_NEVER,
+	GL_LESS,
+	GL_EQUAL,
+	GL_LEQUAL,
+	GL_GREATER,
+	GL_NOTEQUAL,
+	GL_GEQUAL,
+	GL_ALWAYS
+};
+
 static float maxAnisotropy;
 
 /*
@@ -297,6 +314,14 @@ setGlRenderState(uint32 state, uint32 value)
 	case RWGL_DEPTHMASK: curGlState.depthMask = value; break;
 	case RWGL_CULL: curGlState.cullEnable = value; break;
 	case RWGL_CULLFACE: curGlState.cullFace = value; break;
+	case RWGL_STENCIL: curGlState.stencilEnable = value; break;
+	case RWGL_STENCILFUNC: curGlState.stencilFunc = value; break;
+	case RWGL_STENCILFAIL: curGlState.stencilFail = value; break;
+	case RWGL_STENCILZFAIL: curGlState.stencilZFail = value; break;
+	case RWGL_STENCILPASS: curGlState.stencilPass = value; break;
+	case RWGL_STENCILREF: curGlState.stencilRef = value; break;
+	case RWGL_STENCILMASK: curGlState.stencilMask = value; break;
+	case RWGL_STENCILWRITEMASK: curGlState.stencilWriteMask = value; break;
 	}
 }
 
@@ -326,6 +351,31 @@ flushGlRenderState(void)
 	if(oldGlState.depthMask != curGlState.depthMask){
 		oldGlState.depthMask = curGlState.depthMask;
 		glDepthMask(oldGlState.depthMask);
+	}
+
+	if(oldGlState.stencilEnable != curGlState.stencilEnable){
+		oldGlState.stencilEnable = curGlState.stencilEnable;
+		(oldGlState.stencilEnable ? glEnable : glDisable)(GL_STENCIL_TEST);
+	}
+	if(oldGlState.stencilFunc != curGlState.stencilFunc ||
+	   oldGlState.stencilRef != curGlState.stencilRef ||
+	   oldGlState.stencilMask != curGlState.stencilMask){
+		oldGlState.stencilFunc = curGlState.stencilFunc;
+		oldGlState.stencilRef = curGlState.stencilRef;
+		oldGlState.stencilMask = curGlState.stencilMask;
+		glStencilFunc(oldGlState.stencilFunc, oldGlState.stencilRef, oldGlState.stencilMask);
+	}
+	if(oldGlState.stencilPass != curGlState.stencilPass ||
+	   oldGlState.stencilFail != curGlState.stencilFail ||
+	   oldGlState.stencilZFail != curGlState.stencilZFail){
+		oldGlState.stencilPass = curGlState.stencilPass;
+		oldGlState.stencilFail = curGlState.stencilFail;
+		oldGlState.stencilZFail = curGlState.stencilZFail;
+		glStencilOp(oldGlState.stencilFail, oldGlState.stencilZFail, oldGlState.stencilPass);
+	}
+	if(oldGlState.stencilWriteMask != curGlState.stencilWriteMask){
+		oldGlState.stencilWriteMask = curGlState.stencilWriteMask;
+		glStencilMask(oldGlState.stencilWriteMask);
 	}
 
 	if(oldGlState.cullEnable != curGlState.cullEnable){
@@ -472,7 +522,7 @@ static GLint addressConvMap[] = {
 };
 
 static void
-setFilterMode(uint32 stage, int32 filter)
+setFilterMode(uint32 stage, int32 filter, int32 maxAniso = 1)
 {
 	if(rwStateCache.texstage[stage].filter != (Texture::FilterMode)filter){
 		rwStateCache.texstage[stage].filter = (Texture::FilterMode)filter;
@@ -489,6 +539,11 @@ setFilterMode(uint32 stage, int32 filter)
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filterConvMap_NoMIP[filter]);
 				}
 				natras->filterMode = filter;
+			}
+			if(natras->maxAnisotropy != maxAniso){
+				setActiveTexture(stage);
+				glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)maxAniso);
+				natras->maxAnisotropy = maxAniso;
 			}
 		}
 	}
@@ -620,7 +675,7 @@ setTexture(int32 stage, Texture *tex)
 		return;
 	}
 	setRasterStageOnly(stage, tex->raster);
-	setFilterMode(stage, tex->getFilter());
+	setFilterMode(stage, tex->getFilter(), tex->getMaxAnisotropy());
 	setAddressU(stage, tex->getAddressU());
 	setAddressV(stage, tex->getAddressV());
 }
@@ -697,6 +752,55 @@ setRenderState(int32 state, void *pvalue)
 		}
 		break;
 
+	case STENCILENABLE:
+		if(rwStateCache.stencilenable != value){
+			rwStateCache.stencilenable = value;
+			setGlRenderState(RWGL_STENCIL, value);
+		}
+		break;
+	case STENCILFAIL:
+		if(rwStateCache.stencilfail != value){
+			rwStateCache.stencilfail = value;
+			setGlRenderState(RWGL_STENCILFAIL, stencilOpMap[value]);
+		}
+		break;
+	case STENCILZFAIL:
+		if(rwStateCache.stencilzfail != value){
+			rwStateCache.stencilzfail = value;
+			setGlRenderState(RWGL_STENCILZFAIL, stencilOpMap[value]);
+		}
+		break;
+	case STENCILPASS:
+		if(rwStateCache.stencilpass != value){
+			rwStateCache.stencilpass = value;
+			setGlRenderState(RWGL_STENCILPASS, stencilOpMap[value]);
+		}
+		break;
+	case STENCILFUNCTION:
+		if(rwStateCache.stencilfunc != value){
+			rwStateCache.stencilfunc = value;
+			setGlRenderState(RWGL_STENCILFUNC, stencilFuncMap[value]);
+		}
+		break;
+	case STENCILFUNCTIONREF:
+		if(rwStateCache.stencilref != value){
+			rwStateCache.stencilref = value;
+			setGlRenderState(RWGL_STENCILREF, value);
+		}
+		break;
+	case STENCILFUNCTIONMASK:
+		if(rwStateCache.stencilmask != value){
+			rwStateCache.stencilmask = value;
+			setGlRenderState(RWGL_STENCILMASK, value);
+		}
+		break;
+	case STENCILFUNCTIONWRITEMASK:
+		if(rwStateCache.stencilwritemask != value){
+			rwStateCache.stencilwritemask = value;
+			setGlRenderState(RWGL_STENCILWRITEMASK, value);
+		}
+		break;
+
 	case ALPHATESTFUNC:
 		setAlphaTestFunction(value);
 		break;
@@ -765,6 +869,31 @@ getRenderState(int32 state)
 		val = rwStateCache.cullmode;
 		break;
 
+	case STENCILENABLE:
+		val = rwStateCache.stencilenable;
+		break;
+	case STENCILFAIL:
+		val = rwStateCache.stencilfail;
+		break;
+	case STENCILZFAIL:
+		val = rwStateCache.stencilzfail;
+		break;
+	case STENCILPASS:
+		val = rwStateCache.stencilpass;
+		break;
+	case STENCILFUNCTION:
+		val = rwStateCache.stencilfunc;
+		break;
+	case STENCILFUNCTIONREF:
+		val = rwStateCache.stencilref;
+		break;
+	case STENCILFUNCTIONMASK:
+		val = rwStateCache.stencilmask;
+		break;
+	case STENCILFUNCTIONWRITEMASK:
+		val = rwStateCache.stencilwritemask;
+		break;
+
 	case ALPHATESTFUNC:
 		val = rwStateCache.alphaFunc;
 		break;
@@ -802,7 +931,7 @@ resetRenderState(void)
 	rwStateCache.textureAlpha = 0;
 	rwStateCache.alphaTestEnable = 0;
 
-	memset(&oldGlState, 0xFF, sizeof(oldGlState));
+	memset(&oldGlState, 0xFE, sizeof(oldGlState));
 
 	rwStateCache.blendEnable = 0;
 	setGlRenderState(RWGL_BLEND, false);
@@ -821,6 +950,23 @@ resetRenderState(void)
 	rwStateCache.cullmode = CULLNONE;
 	setGlRenderState(RWGL_CULL, false);
 	setGlRenderState(RWGL_CULLFACE, GL_BACK);
+
+	rwStateCache.stencilenable = 0;
+	setGlRenderState(RWGL_STENCIL, GL_FALSE);
+	rwStateCache.stencilfail = STENCILKEEP;
+	setGlRenderState(RWGL_STENCILFAIL, GL_KEEP);
+	rwStateCache.stencilzfail = STENCILKEEP;
+	setGlRenderState(RWGL_STENCILZFAIL, GL_KEEP);
+	rwStateCache.stencilpass = STENCILKEEP;
+	setGlRenderState(RWGL_STENCILPASS, GL_KEEP);
+	rwStateCache.stencilfunc = STENCILALWAYS;
+	setGlRenderState(RWGL_STENCILFUNC, GL_ALWAYS);
+	rwStateCache.stencilref = 0;
+	setGlRenderState(RWGL_STENCILREF, 0);
+	rwStateCache.stencilmask = 0xFFFFFFFF;
+	setGlRenderState(RWGL_STENCILMASK, 0xFFFFFFFF);
+	rwStateCache.stencilwritemask = 0xFFFFFFFF;
+	setGlRenderState(RWGL_STENCILWRITEMASK, 0xFFFFFFFF);
 
 	activeTexture = -1;
 	for(int i = 0; i < MAXNUMSTAGES; i++){
@@ -923,7 +1069,7 @@ Shader *lastShaderUploaded;
 #define U(i) currentShader->uniformLocations[i]
 
 void
-setMaterial(const RGBA &color, const SurfaceProperties &surfaceprops)
+setMaterial(const RGBA &color, const SurfaceProperties &surfaceprops, float extraSurfProp)
 {
 	bool force = lastShaderUploaded != currentShader;
 	if(force || !equal(shaderState.matColor, color)){
@@ -936,12 +1082,13 @@ setMaterial(const RGBA &color, const SurfaceProperties &surfaceprops)
 	if(force ||
 	   shaderState.surfProps.ambient != surfaceprops.ambient ||
 	   shaderState.surfProps.specular != surfaceprops.specular ||
-	   shaderState.surfProps.diffuse != surfaceprops.diffuse){
+	   shaderState.surfProps.diffuse != surfaceprops.diffuse ||
+	   shaderState.extraSurfProp != extraSurfProp){
 		float surfProps[4];
 		surfProps[0] = surfaceprops.ambient;
 		surfProps[1] = surfaceprops.specular;
 		surfProps[2] = surfaceprops.diffuse;
-		surfProps[3] = 0.0f;
+		surfProps[3] = extraSurfProp;
 		glUniform4fv(U(u_surfProps), 1, surfProps);
 		shaderState.surfProps = surfaceprops;
 	}
@@ -1092,7 +1239,7 @@ setFrameBuffer(Camera *cam)
 				Gl3Raster *oldfb = PLUGINOFFSET(Gl3Raster, natzb->fboMate, nativeRasterOffset);
 				if(oldfb->fbo){
 					bindFramebuffer(oldfb->fbo);
-					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 					bindFramebuffer(natfb->fbo);
 				}
 				oldfb->fboMate = nil;
@@ -1101,15 +1248,15 @@ setFrameBuffer(Camera *cam)
 			natzb->fboMate = fbuf;
 			if(natfb->fbo){
 				if(gl3Caps.gles)
-					glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, natzb->texid);
+					glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, natzb->texid);
 				else
-					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, natzb->texid, 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, natzb->texid, 0);
 			}
 		}
 	}else{
 		// remove z-buffer
 		if(natfb->fboMate && natfb->fbo)
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 		natfb->fboMate = nil;
 	}
 }
@@ -1197,7 +1344,7 @@ beginUpdate(Camera *cam)
 #ifdef LIBRW_SDL2
 		SDL_GetWindowSize(glGlobals.window, &w, &h);
 #else
-		glfwGetWindowSize(glGlobals.window, &w, &h);
+		glfwGetFramebufferSize(glGlobals.window, &w, &h);
 #endif
 	}else{
 		w = fb->width;
@@ -1257,6 +1404,10 @@ showRaster(Raster *raster, uint32 flags)
 {
 	// TODO: do this properly!
 #ifdef LIBRW_SDL2
+	if(flags & Raster::FLIPWAITVSYNCH)
+		SDL_GL_SetSwapInterval(1);
+	else
+		SDL_GL_SetSwapInterval(0);
 	SDL_GL_SwapWindow(glGlobals.window);
 #else
 	if(flags & Raster::FLIPWAITVSYNCH)
@@ -1294,70 +1445,156 @@ rasterRenderFast(Raster *raster, int32 x, int32 y)
 }
 
 #ifdef LIBRW_SDL2
+
+static void
+addVideoMode(int displayIndex, int modeIndex)
+{
+	int i;
+	SDL_DisplayMode mode;
+
+	SDL_GetDisplayMode(displayIndex, modeIndex, &mode);
+
+	for(i = 1; i < glGlobals.numModes; i++){
+		if(glGlobals.modes[i].mode.w == mode.w &&
+		   glGlobals.modes[i].mode.h == mode.h &&
+		   glGlobals.modes[i].mode.format == mode.format){
+			// had this mode already, remember highest refresh rate
+			if(mode.refresh_rate > glGlobals.modes[i].mode.refresh_rate)
+				glGlobals.modes[i].mode.refresh_rate = mode.refresh_rate;
+			return;
+		}
+	}
+
+	// none found, add
+	glGlobals.modes[glGlobals.numModes].mode = mode;
+	glGlobals.modes[glGlobals.numModes].flags = VIDEOMODEEXCLUSIVE;
+	glGlobals.numModes++;
+}
+
+static void
+makeVideoModeList(int displayIndex)
+{
+	int i, num, depth;
+
+	num = SDL_GetNumDisplayModes(displayIndex);
+	rwFree(glGlobals.modes);
+	glGlobals.modes = rwNewT(DisplayMode, num+1, ID_DRIVER | MEMDUR_EVENT);
+
+	SDL_GetCurrentDisplayMode(displayIndex, &glGlobals.modes[0].mode);
+	glGlobals.modes[0].flags = 0;
+	glGlobals.numModes = 1;
+
+	for(i = 0; i < num; i++)
+		addVideoMode(displayIndex, i);
+
+	for(i = 0; i < glGlobals.numModes; i++){
+		depth = SDL_BITSPERPIXEL(glGlobals.modes[i].mode.format);
+		// set depth to power of two
+		for(glGlobals.modes[i].depth = 1; glGlobals.modes[i].depth < depth; glGlobals.modes[i].depth <<= 1);
+	}
+}
+
 static int
 openSDL2(EngineOpenParams *openparams)
 {
-	if (!openparams){
-		RWERROR((ERR_GENERAL, "openparams invalid"));
-		return 0;
-	}
+	glGlobals.winWidth = openparams->width;
+	glGlobals.winHeight = openparams->height;
+	glGlobals.winTitle = openparams->windowtitle;
+	glGlobals.pWindow = openparams->window;
 
-	GLenum status;
-	SDL_Window *win;
-	SDL_GLContext ctx;
+	memset(&gl3Caps, 0, sizeof(gl3Caps));
 
 	/* Init SDL */
 	if(SDL_InitSubSystem(SDL_INIT_VIDEO)){
-		RWERROR((ERR_ENGINEOPEN, SDL_GetError()));
+		RWERROR((ERR_GENERAL, SDL_GetError()));
 		return 0;
 	}
-	SDL_ClearHints();
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-	int flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL;
-	if (openparams->fullscreen)
-		flags |= SDL_WINDOW_FULLSCREEN;
-	win = SDL_CreateWindow(openparams->windowtitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, openparams->width, openparams->height, flags);
-	if(win == nil){
-		RWERROR((ERR_ENGINEOPEN, SDL_GetError()));
-		SDL_QuitSubSystem(SDL_INIT_VIDEO);
-		return 0;
-	}
-	ctx = SDL_GL_CreateContext(win);
+	makeVideoModeList(0);
 
-	/* Init GLEW */
-	glewExperimental = GL_TRUE;
-	status = glewInit();
-	if(status != GLEW_OK){
-        	RWERROR((ERR_ENGINEOPEN, glewGetErrorString(status)));
-        	SDL_GL_DeleteContext(ctx);
-        	SDL_DestroyWindow(win);
-        	SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        	return 0;
-	}
-	if(!GLEW_VERSION_3_3){
-		RWERROR((ERR_VERSION, "OpenGL 3.3 needed"));
-		SDL_GL_DeleteContext(ctx);
-		SDL_DestroyWindow(win);
-		SDL_QuitSubSystem(SDL_INIT_VIDEO);
-		return 0;
-	}
-	glGlobals.window = win;
-	glGlobals.glcontext = ctx;
-	*openparams->window = win;
 	return 1;
 }
 
 static int
 closeSDL2(void)
 {
+	SDL_QuitSubSystem(SDL_INIT_VIDEO);
+	return 1;
+}
+
+static struct {
+	int gl;
+	int major, minor;
+} profiles[] = {
+	{ SDL_GL_CONTEXT_PROFILE_CORE, 3, 3 },
+	{ SDL_GL_CONTEXT_PROFILE_CORE, 2, 1 },
+	{ SDL_GL_CONTEXT_PROFILE_ES, 3, 1 },
+	{ SDL_GL_CONTEXT_PROFILE_ES, 2, 0 },
+	{ 0, 0, 0 },
+};
+
+static int
+startSDL2(void)
+{
+	SDL_Window *win;
+	SDL_GLContext ctx;
+	DisplayMode *mode;
+
+	mode = &glGlobals.modes[glGlobals.currentMode];
+
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, glGlobals.numSamples);
+
+	int i;
+	for(i = 0; profiles[i].gl; i++){
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, profiles[i].gl);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, profiles[i].major);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, profiles[i].minor);
+
+		if(mode->flags & VIDEOMODEEXCLUSIVE) {
+			win = SDL_CreateWindow(glGlobals.winTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, mode->mode.w, mode->mode.h, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
+			if (win)
+				SDL_SetWindowDisplayMode(win, &mode->mode);
+		} else {
+			win = SDL_CreateWindow(glGlobals.winTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, glGlobals.winWidth, glGlobals.winHeight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+			if (win)
+				SDL_SetWindowDisplayMode(win, NULL);
+		}
+		if(win){
+			gl3Caps.gles = profiles[i].gl == SDL_GL_CONTEXT_PROFILE_ES;
+			gl3Caps.glversion = profiles[i].major*10 + profiles[i].minor;
+			break;
+		}
+	}
+	if(win == nil){
+		RWERROR((ERR_GENERAL, SDL_GetError()));
+		return 0;
+	}
+	ctx = SDL_GL_CreateContext(win);
+
+	if (!((gl3Caps.gles ? gladLoadGLES2Loader : gladLoadGLLoader) ((GLADloadproc) SDL_GL_GetProcAddress, gl3Caps.glversion)) ) {
+		RWERROR((ERR_GENERAL, "gladLoadGLLoader failed"));
+		SDL_GL_DeleteContext(ctx);
+		SDL_DestroyWindow(win);
+		return 0;
+	}
+
+	printf("OpenGL version: %s\n", glGetString(GL_VERSION));
+
+	glGlobals.window = win;
+	glGlobals.glcontext = ctx;
+	*glGlobals.pWindow = win;
+	glGlobals.presentWidth = 0;
+	glGlobals.presentHeight = 0;
+	glGlobals.presentOffX = 0;
+	glGlobals.presentOffY = 0;
+	return 1;
+}
+
+static int
+stopSDL2(void)
+{
 	SDL_GL_DeleteContext(glGlobals.glcontext);
 	SDL_DestroyWindow(glGlobals.window);
-	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 	return 1;
 }
 #else
@@ -1427,7 +1664,6 @@ openGLFW(EngineOpenParams *openparams)
 		RWERROR((ERR_GENERAL, "glfwInit() failed"));
 		return 0;
 	}
-	glfwWindowHint(GLFW_SAMPLES, 0);
 
 	glGlobals.monitor = glfwGetMonitors(&glGlobals.numMonitors)[0];
 
@@ -1463,7 +1699,6 @@ static struct {
 static int
 startGLFW(void)
 {
-	GLenum status;
 	GLFWwindow *win;
 	DisplayMode *mode;
 
@@ -1474,6 +1709,7 @@ startGLFW(void)
 	glfwWindowHint(GLFW_GREEN_BITS, mode->mode.greenBits);
 	glfwWindowHint(GLFW_BLUE_BITS, mode->mode.blueBits);
 	glfwWindowHint(GLFW_REFRESH_RATE, mode->mode.refreshRate);
+	glfwWindowHint(GLFW_SAMPLES, glGlobals.numSamples);
 
 	int i;
 	for(i = 0; profiles[i].gl; i++){
@@ -1496,21 +1732,16 @@ startGLFW(void)
 		return 0;
 	}
 	glfwMakeContextCurrent(win);
+
+	/* Init GLAD */
+	if (!((gl3Caps.gles ? gladLoadGLES2Loader : gladLoadGLLoader) ((GLADloadproc) glfwGetProcAddress, gl3Caps.glversion)) ) {
+		RWERROR((ERR_GENERAL, "gladLoadGLLoader failed"));
+		glfwDestroyWindow(win);
+		return 0;
+	}
+
 	printf("OpenGL version: %s\n", glGetString(GL_VERSION));
 
-	/* Init GLEW */
-	glewExperimental = GL_TRUE;
-	status = glewInit();
-	if(status != GLEW_OK){
-		RWERROR((ERR_GENERAL, glewGetErrorString(status)));
-		glfwDestroyWindow(win);
-		return 0;
-	}
-	if(!GLEW_VERSION_3_3){
-		RWERROR((ERR_GENERAL, "OpenGL 3.3 needed"));
-		glfwDestroyWindow(win);
-		return 0;
-	}
 	glGlobals.window = win;
 	*glGlobals.pWindow = win;
 	glGlobals.presentWidth = 0;
@@ -1531,16 +1762,26 @@ stopGLFW(void)
 static int
 initOpenGL(void)
 {
+/*
+	// this only works from 3.0 onward,
+	// but luckily GLAD has already taken care of extensions for us
 	int numExt;
 	glGetIntegerv(GL_NUM_EXTENSIONS, &numExt);
 	for(int i = 0; i < numExt; i++){
 		const char *ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
+		if(ext == nil)
+			continue;	// apparently that can happen...
 		if(strcmp(ext, "GL_EXT_texture_compression_s3tc") == 0)
 			gl3Caps.dxtSupported = true;
 		else if(strcmp(ext, "GL_KHR_texture_compression_astc_ldr") == 0)
 			gl3Caps.astcSupported = true;
 //		printf("%d %s\n", i, ext);
 	}
+*/
+	gl3Caps.dxtSupported = GLAD_GL_EXT_texture_compression_s3tc;
+	gl3Caps.astcSupported = GLAD_GL_KHR_texture_compression_astc_ldr;
+
+	glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl3Caps.maxAnisotropy);
 
 	if(gl3Caps.gles){
 		if(gl3Caps.glversion >= 30)
@@ -1654,6 +1895,8 @@ finalizeOpenGL(void)
 static int
 deviceSystemSDL2(DeviceReq req, void *arg, int32 n)
 {
+	VideoMode *rwmode;
+
 	switch(req){
 	case DEVICEOPEN:
 		return openSDL2((EngineOpenParams*)arg);
@@ -1661,12 +1904,50 @@ deviceSystemSDL2(DeviceReq req, void *arg, int32 n)
 		return closeSDL2();
 
 	case DEVICEINIT:
-		return initOpenGL();
+		return startSDL2() && initOpenGL();
 	case DEVICETERM:
-		return termOpenGL();
+		return termOpenGL() && stopSDL2();
 
-	// TODO: implement subsystems and video modes
+	case DEVICEFINALIZE:
+		return finalizeOpenGL();
 
+	// TODO: implement subsystems
+
+	case DEVICEGETNUMVIDEOMODES:
+		return glGlobals.numModes;
+
+	case DEVICEGETCURRENTVIDEOMODE:
+		return glGlobals.currentMode;
+
+	case DEVICESETVIDEOMODE:
+		if(n >= glGlobals.numModes)
+			return 0;
+		glGlobals.currentMode = n;
+		return 1;
+
+	case DEVICEGETVIDEOMODEINFO:
+		rwmode = (VideoMode*)arg;
+		rwmode->width = glGlobals.modes[n].mode.w;
+		rwmode->height = glGlobals.modes[n].mode.h;
+		rwmode->depth = glGlobals.modes[n].depth;
+		rwmode->flags = glGlobals.modes[n].flags;
+		return 1;
+
+	case DEVICEGETMAXMULTISAMPLINGLEVELS:
+		{
+			GLint maxSamples;
+			glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+			if(maxSamples == 0)
+				return 1;
+			return maxSamples;
+		}
+	case DEVICEGETMULTISAMPLINGLEVELS:
+		if(glGlobals.numSamples == 0)
+			return 1;
+		return glGlobals.numSamples;
+	case DEVICESETMULTISAMPLINGLEVELS:
+		glGlobals.numSamples = (uint32)n;
+		return 1;
 	default:
 		assert(0 && "not implemented");
 		return 0;
@@ -1739,6 +2020,21 @@ deviceSystemGLFW(DeviceReq req, void *arg, int32 n)
 		rwmode->flags = glGlobals.modes[n].flags;
 		return 1;
 
+	case DEVICEGETMAXMULTISAMPLINGLEVELS:
+		{
+			GLint maxSamples;
+			glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+			if(maxSamples == 0)
+				return 1;
+			return maxSamples;
+		}
+	case DEVICEGETMULTISAMPLINGLEVELS:
+		if(glGlobals.numSamples == 0)
+			return 1;
+		return glGlobals.numSamples;
+	case DEVICESETMULTISAMPLINGLEVELS:
+		glGlobals.numSamples = (uint32)n;
+		return 1;
 	default:
 		assert(0 && "not implemented");
 		return 0;

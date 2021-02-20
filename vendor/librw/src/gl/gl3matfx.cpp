@@ -12,9 +12,7 @@
 #include "../rwobjects.h"
 #include "../rwanim.h"
 #include "../rwplugins.h"
-#ifdef RW_OPENGL
-#include <GL/glew.h>
-#endif
+
 #include "rwgl3.h"
 #include "rwgl3shader.h"
 #include "rwgl3plg.h"
@@ -34,14 +32,14 @@ static int32 u_fxparams;
 static int32 u_colorClamp;
 
 void
-matfxDefaultRender(InstanceDataHeader *header, InstanceData *inst)
+matfxDefaultRender(InstanceDataHeader *header, InstanceData *inst, uint32 flags)
 {
 	Material *m;
 	m = inst->material;
 
 	defaultShader->use();
 
-	setMaterial(m->color, m->surfaceProps);
+	setMaterial(flags, m->color, m->surfaceProps);
 
 	setTexture(0, m->texture);
 
@@ -68,8 +66,10 @@ uploadEnvMatrix(Frame *frame)
 
 	// cache the matrix across multiple meshes
 	static RawMatrix envMtx;
-	if(frame != lastEnvFrame){
-		lastEnvFrame = frame;
+// can't do it, frame matrix may change
+//	if(frame != lastEnvFrame){
+//		lastEnvFrame = frame;
+	{
 
 		RawMatrix invMtx;
 		Matrix::invert(&invMat, frame->getLTM());
@@ -81,13 +81,13 @@ uploadEnvMatrix(Frame *frame)
 }
 
 void
-matfxEnvRender(InstanceDataHeader *header, InstanceData *inst, MatFX::Env *env)
+matfxEnvRender(InstanceDataHeader *header, InstanceData *inst, uint32 flags, MatFX::Env *env)
 {
 	Material *m;
 	m = inst->material;
 
 	if(env->tex == nil || env->coefficient == 0.0f){
-		matfxDefaultRender(header, inst);
+		matfxDefaultRender(header, inst, flags);
 		return;
 	}
 
@@ -97,7 +97,7 @@ matfxEnvRender(InstanceDataHeader *header, InstanceData *inst, MatFX::Env *env)
 	setTexture(1, env->tex);
 	uploadEnvMatrix(env->frame);
 
-	setMaterial(m->color, m->surfaceProps);
+	setMaterial(flags, m->color, m->surfaceProps);
 
 	float fxparams[2];
 	fxparams[0] = env->coefficient;
@@ -123,16 +123,11 @@ matfxEnvRender(InstanceDataHeader *header, InstanceData *inst, MatFX::Env *env)
 void
 matfxRenderCB(Atomic *atomic, InstanceDataHeader *header)
 {
+	uint32 flags = atomic->geometry->flags;
 	setWorldMatrix(atomic->getFrame()->getLTM());
 	lightingCB(atomic);
 
-#ifdef RW_GL_USE_VAOS
-	glBindVertexArray(header->vao);
-#else
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, header->ibo);
-	glBindBuffer(GL_ARRAY_BUFFER, header->vbo);
-	setAttribPointers(header->attribDesc, header->numAttribs);
-#endif
+	setupVertexInput(header);
 
 	lastEnvFrame = nil;
 
@@ -143,20 +138,18 @@ matfxRenderCB(Atomic *atomic, InstanceDataHeader *header)
 		MatFX *matfx = MatFX::get(inst->material);
 
 		if(matfx == nil)
-			matfxDefaultRender(header, inst);
+			matfxDefaultRender(header, inst, flags);
 		else switch(matfx->type){
 		case MatFX::ENVMAP:
-			matfxEnvRender(header, inst, &matfx->fx[0].env);
+			matfxEnvRender(header, inst, flags, &matfx->fx[0].env);
 			break;
 		default:
-			matfxDefaultRender(header, inst);
+			matfxDefaultRender(header, inst, flags);
 			break;
 		}
 		inst++;
 	}
-#ifndef RW_GL_USE_VAOS
-	disableAttribPointers(header->attribDesc, header->numAttribs);
-#endif
+	teardownVertexInput(header);
 }
 
 ObjPipeline*

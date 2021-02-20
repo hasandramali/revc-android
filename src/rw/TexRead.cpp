@@ -1,7 +1,11 @@
 #pragma warning( push )
 #pragma warning( disable : 4005)
 #pragma warning( pop )
+#define FORCE_PC_SCALING
 #include "common.h"
+#ifdef ANISOTROPIC_FILTERING
+#include "rpanisot.h"
+#endif
 #include "crossplatform.h"
 #include "platform.h"
 
@@ -18,6 +22,7 @@
 #include "Sprite2d.h"
 #include "Text.h"
 #include "RwHelper.h"
+#include "Frontend.h"
 #endif //GTA_PC
 
 float texLoadTime;
@@ -47,6 +52,12 @@ RwTextureGtaStreamRead(RwStream *stream)
 		texLoadTime = (texNumLoaded * texLoadTime + (float)CTimer::GetCurrentTimeInCycles() / (float)CTimer::GetCyclesPerMillisecond() - preloadTime) / (float)(texNumLoaded+1);
 		texNumLoaded++;
 	}
+
+#ifdef ANISOTROPIC_FILTERING
+	if(tex && RpAnisotGetMaxSupportedMaxAnisotropy() > 1)	// BUG? this was RpAnisotTextureGetMaxAnisotropy, but that doesn't make much sense
+		RpAnisotTextureSetMaxAnisotropy(tex, RpAnisotGetMaxSupportedMaxAnisotropy());
+#endif
+
 	return tex;
 }
 
@@ -296,6 +307,7 @@ ConvertingTexturesScreen(uint32 num, uint32 count, const char *text)
 	CFont::SetBackgroundOff();
 	CFont::SetPropOn();
 	CFont::SetScale(SCREEN_SCALE_X(0.45f), SCREEN_SCALE_Y(0.7f));
+	CFont::SetCentreOff();
 	CFont::SetWrapx(SCREEN_SCALE_FROM_RIGHT(170.0f));
 	CFont::SetJustifyOff();
 	CFont::SetColor(CRGBA(255, 217, 106, 255));
@@ -357,6 +369,15 @@ CreateTxdImageForVideoCard()
 	// so let's hope that is the case for all
 	rw::gl3::needToReadBackTextures = true;
 #endif
+	
+#ifdef DISABLE_VSYNC_ON_TEXTURE_CONVERSION
+	// let's disable vsync and frame limiter to speed up texture conversion
+	// (actually we probably don't need to disable frame limiter in here, but let's do it just in case =P)
+	int8 vsyncState = CMenuManager::m_PrefsVsync;
+	int8 frameLimiterState = CMenuManager::m_PrefsFrameLimiter;
+	CMenuManager::m_PrefsVsync = 0;
+	CMenuManager::m_PrefsFrameLimiter = 0;
+#endif
 
 	int32 i;
 	for (i = 0; i < TXDSTORESIZE; i++) {
@@ -410,6 +431,12 @@ CreateTxdImageForVideoCard()
 			CStreaming::FlushRequestList();
 		}
 	}
+
+#ifdef DISABLE_VSYNC_ON_TEXTURE_CONVERSION
+	// restore vsync and frame limiter states
+	CMenuManager::m_PrefsVsync = vsyncState;
+	CMenuManager::m_PrefsFrameLimiter = frameLimiterState;
+#endif
 
 	RwStreamClose(img, nil);
 	delete []buf;

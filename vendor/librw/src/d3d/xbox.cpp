@@ -532,7 +532,7 @@ struct RasterFormatInfo
 
 // indexed directly by RW format
 static RasterFormatInfo formatInfoRW[16] = {
-	{ 0, 0, 0},
+	{ 0, 0, 0, 0},
 	{ D3DFMT_A1R5G5B5, 16, 1, Raster::C1555 },
 	{ D3DFMT_R5G6B5,   16, 0, Raster::C565 },
 	{ D3DFMT_A4R4G4B4, 16, 1, Raster::C4444 },
@@ -789,7 +789,7 @@ rasterToImage(Raster *raster)
 	uint8 *pixels = raster->pixels;
 
 	// NB:
-	assert(image->bpp == natras->bpp);
+	assert(image->bpp == (int)natras->bpp);
 	assert(image->stride == raster->stride);
 	unswizzle(imgpixels, pixels, image->width, image->height, image->bpp);
 	// Fix RGB order
@@ -883,8 +883,8 @@ readNativeTexture(Stream *stream)
 		RWERROR((ERR_PLATFORM, platform));
 		return nil;
 	}
-	if(version < 0x34001){
-		RWERROR((ERR_VERSION, version));
+	if(vers < 0x34001){
+		RWERROR((ERR_VERSION, vers));
 		return nil;
 	}
 	Texture *tex = Texture::create(nil);

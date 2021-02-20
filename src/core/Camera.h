@@ -213,7 +213,9 @@ public:
 	void PrintMode(void);
 
 	void Process_Debug(const CVector&, float, float, float);
+#ifdef GTA_SCENE_EDIT
 	void Process_Editor(const CVector&, float, float, float);
+#endif
 	void Process_ModelView(const CVector &CameraTarget, float, float, float);
 	void Process_FollowPed(const CVector &CameraTarget, float TargetOrientation, float, float);
 	void Process_FollowPedWithMouse(const CVector &CameraTarget, float TargetOrientation, float, float);
@@ -639,7 +641,11 @@ public:
 	bool IsPointVisible(const CVector &center, const CMatrix *mat);
 	bool IsSphereVisible(const CVector &center, float radius, const CMatrix *mat);
 	bool IsSphereVisible(const CVector &center, float radius);
-	bool IsBoxVisible(RwV3d *box, const CMatrix *mat);
+#ifdef GTA_PS2
+	bool IsBoxVisible(CVuVector *box, const CMatrix *mat);
+#else
+	bool IsBoxVisible(CVector *box, const CMatrix *mat);
+#endif
 };
 
 VALIDATE_SIZE(CCamera, 0xE9D8);
