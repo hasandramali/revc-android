@@ -27,4 +27,4 @@ jobs:
       # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
       run: |
         .\premake-vs2019.cmd
-        msbuild /m /p:Configuration=Release .\build\re3.sln
+        msbuild /m /p:Configuration=Release build/reVC.sln
