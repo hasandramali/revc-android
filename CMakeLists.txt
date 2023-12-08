@@ -1,86 +1,170 @@
-cmake_minimum_required(VERSION 3.8)
+find_package(Threads REQUIRED)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 
-set(EXECUTABLE reVC)
-set(PROJECT REVC)
+file(GLOB_RECURSE ${PROJECT}_SOURCES "*.cpp" "*.h" "*.rc")
 
-project(${EXECUTABLE} C CXX)
-list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+function(header_directories RETURN_LIST)
+    file(GLOB_RECURSE ALL_SRCS *.h *.cpp *.c)
+    set(RELDIRS)
+    foreach(SRC ${ALL_SRCS})
+        file(RELATIVE_PATH RELSRC "${CMAKE_CURRENT_SOURCE_DIR}" "${SRC}")
+        get_filename_component(RELDIR "${RELSRC}" DIRECTORY)
+        list(APPEND RELDIRS ${RELDIR})
+    endforeach()
+    list(REMOVE_DUPLICATES RELDIRS)
+    set(${RETURN_LIST} ${RELDIRS} PARENT_SCOPE)
+endfunction()
 
-include(GetGitRevisionDescription)
-get_git_head_revision(GIT_REFSPEC GIT_SHA1 "ALLOW_LOOKING_ABOVE_CMAKE_SOURCE_DIR")
-message(STATUS "Building ${CMAKE_PROJECT_NAME} GIT SHA1: ${GIT_SHA1}")
+header_directories(${PROJECT}_INCLUDES)
 
-if(WIN32)
-    set(${PROJECT}_AUDIOS "OAL" "MSS")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/extras/GitSHA1.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/extras/GitSHA1.cpp" @ONLY)
+list(APPEND ${PROJECT}_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/extras/GitSHA1.cpp")
+
+add_executable(${EXECUTABLE} WIN32
+    ${${PROJECT}_SOURCES}
+)
+
+target_link_libraries(${EXECUTABLE} PRIVATE
+    librw::librw
+    Threads::Threads
+)
+
+target_include_directories(${EXECUTABLE}
+    PRIVATE
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${${PROJECT}_INCLUDES}>
+)
+
+target_compile_definitions(${EXECUTABLE}
+    PRIVATE
+        $<IF:$<CONFIG:DEBUG>,DEBUG,NDEBUG>
+        LIBRW
+        CMAKE_NO_AUTOLINK
+)
+
+if(LIBRW_PLATFORM_D3D9)
+    target_compile_definitions(${EXECUTABLE}
+        PUBLIC
+            USE_D3D9
+    )
+endif()
+
+target_compile_definitions(${EXECUTABLE} PRIVATE CMAKE_BUILD)
+target_compile_definitions(${EXECUTABLE} PRIVATE USE_OUR_VERSIONING)
+
+if(${PROJECT}_AUDIO STREQUAL "OAL")
+    find_package(OpenAL REQUIRED)
+    if(TARGET OpenAL::OpenAL)
+        target_link_libraries(${EXECUTABLE} PRIVATE OpenAL::OpenAL)
+    else()
+        target_include_directories(${EXECUTABLE} PRIVATE ${OPENAL_INCLUDE_DIR})
+        target_link_libraries(${EXECUTABLE} PRIVATE ${OPENAL_LIBRARY})
+        target_compile_definitions(${EXECUTABLE} PRIVATE ${OPENAL_DEFINITIONS})
+    endif()
+    target_compile_definitions(${EXECUTABLE} PRIVATE AUDIO_OAL)
+elseif(${PROJECT}_AUDIO STREQUAL "MSS")
+    find_package(MilesSDK REQUIRED)
+    target_compile_definitions(${EXECUTABLE} PRIVATE AUDIO_MSS)
+    target_link_libraries(${EXECUTABLE} PRIVATE MilesSDK::MilesSDK)
+endif()
+
+find_package(mpg123 REQUIRED)
+target_link_libraries(${EXECUTABLE} PRIVATE
+    MPG123::libmpg123
+)
+if(${PROJECT}_WITH_OPUS)
+    find_package(opusfile REQUIRED)
+    target_link_libraries(${EXECUTABLE} PRIVATE
+        opusfile::opusfile
+    )
+    target_compile_definitions(${EXECUTABLE} PRIVATE AUDIO_OPUS)
+endif()
+if(${PROJECT}_WITH_LIBSNDFILE)
+    find_package(SndFile REQUIRED)
+    target_link_libraries(${EXECUTABLE} PRIVATE
+        SndFile::SndFile
+    )
+    target_compile_definitions(${EXECUTABLE} PRIVATE AUDIO_OAL_USE_SNDFILE)
+endif()
+
+target_compile_definitions(${EXECUTABLE} PRIVATE )
+
+option(${PROJECT}_WITH_SANITIZERS "Use UB sanitizers (better crash log)" OFF)
+option(${PROJECT}_WITH_ASAN "Use Address sanitizer (better crash log)" OFF)
+
+if(${PROJECT}_WITH_SANITIZERS)
+    target_compile_options(${EXECUTABLE} PUBLIC
+            -fsanitize=undefined,float-divide-by-zero,integer,implicit-conversion,implicit-integer-truncation,implicit-integer-arithmetic-value-change,local-bounds,nullability
+            -g3 -fno-omit-frame-pointer)
+    target_link_options(${EXECUTABLE} PUBLIC -fsanitize=undefined,float-divide-by-zero,integer,implicit-conversion,implicit-integer-truncation,implicit-integer-arithmetic-value-change,local-bounds,nullability)
+endif()
+
+if(${PROJECT}_WITH_ASAN)
+    target_compile_options(${EXECUTABLE} PUBLIC -fsanitize=address -g3 -fno-omit-frame-pointer)
+    target_link_options(${EXECUTABLE} PUBLIC -fsanitize=address)
+endif()
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    target_compile_options(${EXECUTABLE}
+        PRIVATE
+            "-Wall"
+    )
+    if (NOT LIBRW_PLATFORM_PS2)
+        target_compile_options(${EXECUTABLE}
+            PRIVATE
+                -Wextra
+                -Wdouble-promotion
+                -Wpedantic
+        )
+    endif()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(${EXECUTABLE}
+        PUBLIC
+            /Zc:sizedDealloc-
+    )
+endif()
+
+if(NINTENDO_SWITCH)
+    set(${PROJECT}_C_CXX_EXTENSIONS ON)
 else()
-    set(${PROJECT}_AUDIOS "OAL")
+    set(${PROJECT}_C_CXX_EXTENSIONS OFF)
 endif()
 
-set(${PROJECT}_AUDIO "OAL" CACHE STRING "Audio")
+if(LIBRW_PLATFORM_GL3 AND LIBRW_GL3_GFXLIB STREQUAL "GLFW")
+	include(CheckSymbolExists)
 
-option(${PROJECT}_WITH_OPUS "Build ${EXECUTABLE} with opus support" OFF)
-option(${PROJECT}_WITH_LIBSNDFILE "Build ${EXECUTABLE} with libsndfile (instead of internal decoder)" OFF)
+	set(CMAKE_REQUIRED_LIBRARIES glfw)
+	set(CMAKE_REQUIRED_DEFINITIONS -DGLFW_EXPOSE_NATIVE_X11)
+	check_symbol_exists(glfwGetX11Display "GLFW/glfw3.h;GLFW/glfw3native.h" GLFW_HAS_X11)
+	unset(CMAKE_REQUIRED_DEFINITIONS)
+	unset(CMAKE_REQUIRED_LIBRARIES)
 
-set_property(CACHE ${PROJECT}_AUDIO PROPERTY STRINGS ${${PROJECT}_AUDIOS})
-message(STATUS "${PROJECT}_AUDIO = ${${PROJECT}_AUDIO} (choices=${${PROJECT}_AUDIOS})")
-set("${PROJECT}_AUDIO_${${PROJECT}_AUDIO}" ON)
-if(NOT ${PROJECT}_AUDIO IN_LIST ${PROJECT}_AUDIOS)
-    message(FATAL_ERROR "Illegal ${PROJECT}_AUDIO=${${PROJECT}_AUDIO}")
+	if (GLFW_HAS_X11)
+		find_package(X11 REQUIRED)
+		target_link_libraries(${EXECUTABLE} PRIVATE X11::X11)
+		target_compile_definitions(${EXECUTABLE} PRIVATE GET_KEYBOARD_INPUT_FROM_X11)
+	endif (GLFW_HAS_X11)
 endif()
 
-option(${PROJECT}_VENDORED_LIBRW "Use vendored librw" ON)
-if(${PROJECT}_VENDORED_LIBRW)
-    add_subdirectory(vendor/librw)
-else()
-    find_package(librw REQUIRED)
-endif()
-add_subdirectory(src)
+set_target_properties(${EXECUTABLE}
+    PROPERTIES
+        C_STANDARD 11
+        C_EXTENSIONS ${${PROJECT}_C_CXX_EXTENSIONS}
+        C_STANDARD_REQUIRED ON
+        CXX_STANDARD 11
+        CXX_EXTENSIONS ${${PROJECT}_C_CXX_EXTENSIONS}
+        CXX_STANDARD_REQUIRED ON
+)
 
 if(${PROJECT}_INSTALL)
-    install(DIRECTORY gamefiles/ DESTINATION ".")
-    if(LIBRW_PLATFORM_NULL)
-        set(platform "-null")
-    elseif(LIBRW_PLATFORM_PS2)
-        set(platform "-ps2")
-    elseif(LIBRW_PLATFORM_GL3)
-        if(LIBRW_GL3_GFXLIB STREQUAL "GLFW")
-            set(platform "-gl3-glfw")
-        else()
-            set(platform "-gl3-sdl2")
-        endif()
-    elseif(LIBRW_PLATFORM_D3D9)
-        set(platform "-d3d9")
+    install(
+        TARGETS ${EXECUTABLE}
+        EXPORT ${EXECUTABLE}-targets
+        RUNTIME DESTINATION "."
+    )
+    if(MSVC)
+        install(FILES $<TARGET_PDB_FILE:${EXECUTABLE}> DESTINATION "." OPTIONAL)
     endif()
-    if(${PROJECT}_AUDIO_OAL)
-        set(audio "-oal")
-    elseif(${PROJECT}_AUDIO_MSS)
-        set(audio "-mss")
-    endif()
-    if(${PROJECT}_WITH_OPUS)
-        set(audio "${audio}-opus")
-    endif()
-    if(NOT LIBRW_PLATFORM_PS2)
-        if(WIN32)
-            set(os "-win")
-        elseif(APPLE)
-            set(os "-apple")
-        elseif(UNIX)
-            set(os "-linux")
-        else()
-            set(compiler "-UNK")
-            message(WARNING "Unknown os. Created cpack package will be wrong. (override using cpack -P)")
-        endif()
-    endif()
-
-    set(CPACK_PACKAGE_NAME "${PROJECT_NAME}${platform}${audio}${os}${compiler}")
-    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "GTA III reversed")
-    set(CPACK_PACKAGE_VENDOR "GTAModding")
-    # FIXME: missing license (https://github.com/GTAmodding/re3/issues/794)
-    # set(CPACK_PACKAGE_DESCRIPTION_FILE "${PROJECT_SOURCE_DIR}/LICENSE")
-    # set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
-    set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_NAME}")
-    set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}")
-    set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}")
-    set(CPACK_GENERATOR "TXZ")
-    include(CPack)
 endif()
+
+reVC_platform_target(${EXECUTABLE} INSTALL)

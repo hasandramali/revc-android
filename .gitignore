@@ -360,3 +360,6 @@ codewarrior/Release/
 codewarrior/Debug/
 
 src/extras/GitSHA1.cpp
+
+.waf3*
+.lock-waf_linux_build

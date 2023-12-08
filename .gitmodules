@@ -10,7 +10,8 @@
 	path = vendor/opusfile
 	url = https://github.com/xiph/opusfile.git
 	branch = master
+
 [submodule "vendor/librw"]
 	path = vendor/librw
-	url = https://github.com/klaymen1n/librw.git
+	url = git@github.com:klaymen1n/librw.git
 	branch = master
