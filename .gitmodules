@@ -13,5 +13,5 @@
 
 [submodule "vendor/librw"]
 	path = vendor/librw
-	url = git@github.com:klaymen1n/librw.git
+	url = http://localhost:3000/1sh0zer/librw.git
 	branch = master
