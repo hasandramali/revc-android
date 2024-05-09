@@ -633,9 +633,10 @@ CMenuManager::CentreMousePointer()
 		Point.y = SCREEN_HEIGHT / 2;
 		ClientToScreen(PSGLOBAL(window), &Point);
 		SetCursorPos(Point.x, Point.y);
-#elif defined RW_GL3
+#elif defined RW_GL3s //FIXME
 		glfwSetCursorPos(PSGLOBAL(window), SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
 #endif
+		SDL_WarpMouseInWindow(PSGLOBAL(window), SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
 
 		PSGLOBAL(lastMousePos.x) = SCREEN_WIDTH / 2;
 		PSGLOBAL(lastMousePos.y) = SCREEN_HEIGHT / 2;
@@ -2533,6 +2534,8 @@ CMenuManager::DrawBackground(bool transitionCall)
 
 		mouse.Translate(m_nMousePosX, m_nMousePosY);
 		shad.Translate(m_nMousePosX, m_nMousePosY);
+		//printf("%d asas %d\n", m_nMousePosX, m_nMousePosY);
+		
 		m_aFrontEndSprites[MENUSPRITE_MOUSE].Draw(shad, CRGBA(100, 100, 100, 50));
 		m_aFrontEndSprites[MENUSPRITE_MOUSE].Draw(mouse, CRGBA(255, 255, 255, 255));
 	}
@@ -4590,8 +4593,8 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 			JoyButtonJustClicked = false;
 			MouseButtonJustClicked = false;
 
-			if (CPad::GetPad(0)->GetLeftMouseJustDown())
-				MouseButtonJustClicked = rsMOUSELEFTBUTTON;
+			if (CPad::GetPad(0)->GetLeftMouseJustDown()){
+				MouseButtonJustClicked = rsMOUSELEFTBUTTON;}
 			else if (CPad::GetPad(0)->GetRightMouseJustUp())
 				MouseButtonJustClicked = rsMOUSERIGHTBUTTON;
 			else if (CPad::GetPad(0)->GetMiddleMouseJustUp())
@@ -4946,7 +4949,7 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 						PSGLOBAL(joy1)->GetCapabilities(&devCaps);
 						ControlsManager.InitDefaultControlConfigJoyPad(devCaps.dwButtons);
 					}
-#else
+//#else FIXME
 					if (PSGLOBAL(joy1id) != -1 && glfwJoystickPresent(PSGLOBAL(joy1id))) {
 						int count;
 						glfwGetJoystickButtons(PSGLOBAL(joy1id), &count);

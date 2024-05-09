@@ -14,10 +14,10 @@ def options(opt):
 def configure(conf):
 	conf.env.append_unique('DEFINES',[
 		'RW_GL3',
+		'LIBRW_SDL2',
 		'LIBRW',
 		'AUDIO_OAL',
-		'USE_OUR_VERSIONING',
-		'GET_KEYBOARD_INPUT_FROM_X11',
+		'USE_OUR_VERSIONING'
 	])
 	git_sha1 = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
 	sha1_text = f'#define GIT_SHA1 "{git_sha1.decode("utf-8")}"'
@@ -151,6 +151,7 @@ def build(bld):
         'skel/skeleton.cpp',
         'skel/events.cpp',
         'skel/glfw/glfw.cpp',
+        'skel/sdl2.cpp',
         'collision/TempColModels.cpp',
         'collision/ColModel.cpp',
         'collision/VuCollision.cpp',
@@ -303,7 +304,7 @@ def build(bld):
 
 	defines = []
 
-	libs = ['OPENAL', 'MPG123', 'SNDFILE', 'GL', 'X11', 'GLFW', 'vendor/librw']
+	libs = ['OPENAL', 'MPG123', 'SNDFILE', 'GL', 'vendor/librw']
 
 	
 	install_path = bld.env.PREFIX

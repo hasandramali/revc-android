@@ -60,7 +60,7 @@ int _caserename(const char *old_filename, const char *new_filename);
 #define caserename _caserename
 #endif
 
-#ifdef RW_GL3
+#ifdef RW_GL31
 typedef struct
 {
     GLFWwindow* window;
@@ -82,6 +82,20 @@ void joysChangeCB(int jid, int event);
 #ifdef DETECT_JOYSTICK_MENU
 extern char gSelectedJoystickName[128];
 #endif
+
+typedef struct
+{
+    SDL_Window* window;
+    RwBool		fullScreen;
+    RwV2d		lastMousePos;
+    double      mouseWheel; // glfw doesn't cache it
+    bool        cursorIsInWindow;
+    RwInt8        joy1id;
+    RwInt8        joy2id;
+}
+psGlobalType;
+
+#define PSGLOBAL(var) (((psGlobalType *)(RsGlobal.ps))->var)
 
 enum eGameState
 {

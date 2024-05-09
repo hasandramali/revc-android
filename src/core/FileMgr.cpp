@@ -37,6 +37,11 @@ static myFILE myfiles[NUMFILES];
 // Case-insensitivity on linux (from https://github.com/OneSadCookie/fcaseopen)
 void mychdir(char const *path)
 {
+	if(!path)
+	{
+		printf("What a piece of shit!\n"); //FIXME
+		return;
+	}
 	char* r = casepath(path, false);
     if (r) {
         chdir(r);

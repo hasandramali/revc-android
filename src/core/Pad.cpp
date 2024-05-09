@@ -1,3 +1,5 @@
+#include "SDL_events.h"
+#include "SDL_mouse.h"
 #define WITHDINPUT
 #include "common.h"
 #include "crossplatform.h"
@@ -865,7 +867,7 @@ CMouseControllerState CMousePointerStateHelper::GetMouseSetUp()
 #else
 	// It seems there is no way to get number of buttons on mouse, so assign all buttons if we have mouse.
 	double xpos = 1.0f, ypos;
-	glfwGetCursorPos(PSGLOBAL(window), &xpos, &ypos);
+//	glfwGetCursorPos(PSGLOBAL(window), &xpos, &ypos);
 
 	if (xpos != 0.f) {
 		state.MMB = true;
@@ -921,7 +923,7 @@ void CPad::UpdateMouse()
 			NewMouseControllerState = PCTempMouseControllerState;
 		}
 	}
-#else
+#elif !defined LIBRW_SDL2 
 	if ( IsForegroundApp() && PSGLOBAL(cursorIsInWindow) )
 	{
 		double xpos = 1.0f, ypos;
@@ -958,6 +960,41 @@ void CPad::UpdateMouse()
 		PSGLOBAL(lastMousePos.x) = xpos;
 		PSGLOBAL(lastMousePos.y) = ypos;
 		PSGLOBAL(mouseWheel) = 0.0f;
+
+		OldMouseControllerState = NewMouseControllerState;
+		NewMouseControllerState = PCTempMouseControllerState;
+	}
+#else
+	if ( IsForegroundApp() )
+	{
+		int32 signX = 1;
+		int32 signy = 1;
+
+		if (!FrontEndMenuManager.m_bMenuActive)
+		{
+			if (MousePointerStateHelper.bInvertVertically)
+				signy = -1;
+			if (MousePointerStateHelper.bInvertHorizontally)
+				signX = -1;
+		}
+
+		PCTempMouseControllerState.Clear();
+
+		PCTempMouseControllerState.x = (float)(signX * (mousePosX - PSGLOBAL(lastMousePos.x)));
+		PCTempMouseControllerState.y = (float)(signy * (mousePosY - PSGLOBAL(lastMousePos.y)));
+		PCTempMouseControllerState.LMB = mouse1;
+		PCTempMouseControllerState.RMB = mouse2;
+		/*PCTempMouseControllerState.MMB = glfwGetMouseButton(PSGLOBAL(window), GLFW_MOUSE_BUTTON_MIDDLE);
+		PCTempMouseControllerState.MXB1 = glfwGetMouseButton(PSGLOBAL(window), GLFW_MOUSE_BUTTON_4);
+		PCTempMouseControllerState.MXB2 = glfwGetMouseButton(PSGLOBAL(window), GLFW_MOUSE_BUTTON_5);*/
+
+		if (PSGLOBAL(mouseWheel) > 0)
+			PCTempMouseControllerState.WHEELUP = 1;
+		else if (PSGLOBAL(mouseWheel) < 0)
+			PCTempMouseControllerState.WHEELDN = 1;
+
+		PSGLOBAL(lastMousePos.x) = mousePosX;
+		PSGLOBAL(lastMousePos.y) = mousePosY;
 
 		OldMouseControllerState = NewMouseControllerState;
 		NewMouseControllerState = PCTempMouseControllerState;
@@ -1660,7 +1697,7 @@ void CPad::UpdatePads(void)
 #ifdef XINPUT
 	GetPad(0)->AffectFromXinput(m_bMapPadOneToPadTwo ? 1 : 0);
 	GetPad(1)->AffectFromXinput(m_bMapPadOneToPadTwo ? 0 : 1);
-#else
+//#else
 	CapturePad(0);
 #endif
 
