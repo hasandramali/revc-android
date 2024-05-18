@@ -15,3 +15,9 @@
 	path = vendor/librw
 	url = http://localhost:3000/1sh0zer/librw.git
 	branch = master
+[submodule "vendor/openal-soft"]
+	path = vendor/openal-soft
+	url = https://github.com/kcat/openal-soft/
+[submodule "vendor/libmpg123"]
+	path = vendor/libmpg123
+	url = https://github.com/gypified/libmpg123

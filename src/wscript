@@ -151,7 +151,7 @@ def build(bld):
         'skel/skeleton.cpp',
         'skel/events.cpp',
         'skel/glfw/glfw.cpp',
-        'skel/sdl2.cpp',
+        'skel/sdl2/sdl2.cpp',
         'collision/TempColModels.cpp',
         'collision/ColModel.cpp',
         'collision/VuCollision.cpp',
@@ -276,6 +276,11 @@ def build(bld):
         'save/GenericGameStorage.cpp',
         'save/PCSave.cpp',
 	]
+	if bld.env.DEST_OS == 'android':
+		source += [
+			'skel/android/android.cpp'
+		]
+
 	includes = [
 		'.',
 		'core',
@@ -301,24 +306,35 @@ def build(bld):
 		'save',
 		'audio/eax',
 	]
-
 	defines = []
 
-	libs = ['OPENAL', 'MPG123', 'SNDFILE', 'GL', 'vendor/librw']
+	libs = ['OPENAL', 'MPG123', 'SNDFILE', 'vendor/librw']
 
 	
 	install_path = bld.env.PREFIX
-
-	bld(
-		source   = source,
-		target   = "revc",
-		name	 = PROJECT_NAME,
-		features = 'c cxx cxxprogram',
-		includes = includes,
-		defines  = defines,
-		use	  = libs,
-		subsystem = bld.env.MSVC_SUBSYSTEM,
-		idx	  = bld.get_taskgen_count()
-	)
-
-
+        
+        
+	if bld.env.DEST_OS == 'android':
+		bld.shlib(
+			source=source,
+			target="revc",
+			name=PROJECT_NAME,
+			features='c cxx cxxprogram',
+			includes=includes,
+			defines=defines,
+			use=libs,
+			subsystem=bld.env.MSVC_SUBSYSTEM,
+			idx=bld.get_taskgen_count()
+		)
+	else:
+		bld(
+			source=source,
+			target="revc",
+			name=PROJECT_NAME,
+			features='c cxx cxxprogram',
+			includes=includes,
+			defines=defines,
+			use=libs,
+			subsystem=bld.env.MSVC_SUBSYSTEM,
+			idx=bld.get_taskgen_count()
+		)

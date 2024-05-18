@@ -60,9 +60,9 @@ class CSortStereoBuffer
 {
 	uint16* PcmBuf;
 	size_t BufSize;
-//#ifdef MULTITHREADED_AUDIO
-//	std::mutex Mutex;
-//#endif
+#ifdef MULTITHREADED_AUDIO
+	std::mutex Mutex;
+#endif
 
 public:
 	CSortStereoBuffer() : PcmBuf(nil), BufSize(0) {}
@@ -90,9 +90,9 @@ public:
 
 	void SortStereo(void* buf, size_t size)
 	{
-//#ifdef MULTITHREADED_AUDIO
-//		std::lock_guard<std::mutex> lock(Mutex);
-//#endif
+#ifdef MULTITHREADED_AUDIO
+		std::lock_guard<std::mutex> lock(Mutex);
+#endif
 		uint16* InBuf = (uint16*)buf;
 		uint16* OutBuf = GetBuffer(size);
 
