@@ -487,6 +487,6 @@ extern CPad Pads[MAX_PADS];
 #ifdef LIBRW_SDL2
 extern bool mouse1;
 extern bool mouse2;
-extern int mousePosX;
-extern int mousePosY;
+extern float mousePosX;
+extern float mousePosY;
 #endif

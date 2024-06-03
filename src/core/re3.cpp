@@ -136,6 +136,7 @@ CustomFrontendOptionsPopulate(void)
 #ifdef EXTENDED_PIPELINES
 	const char *vehPipelineNames[] = { "FED_MFX", "FED_NEO" };
 	const char *off_on[] = { "FEM_OFF", "FEM_ON" };
+	CFileMgr::ChangeDir("\\");
 	fd = CFileMgr::OpenFile("neo/neo.txd","r");
 	if (fd) {
 #ifdef GRAPHICS_MENU_OPTIONS

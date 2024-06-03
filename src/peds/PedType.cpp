@@ -234,6 +234,9 @@ CPedStats::Initialise(void)
 void
 CPedStats::Shutdown(void)
 {
+	int *ptr = NULL;
+	*ptr = 42;
+	
 	int i;
 	debug("Shutting down CPedStats...\n");
 	for(i = 0; i < NUM_PEDSTATS; i++)

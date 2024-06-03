@@ -88,7 +88,7 @@ typedef struct
     SDL_Window* window;
     RwBool		fullScreen;
     RwV2d		lastMousePos;
-    double      mouseWheel; // glfw doesn't cache it
+    int      mouseWheel; // glfw doesn't cache it
     bool        cursorIsInWindow;
     RwInt8        joy1id;
     RwInt8        joy2id;
@@ -140,7 +140,14 @@ struct SYSTEMTIME {
 
 void GetLocalTime_CP(SYSTEMTIME* out);
 #define GetLocalTime GetLocalTime_CP
+
+#ifndef ANDROID
 #define OutputDebugString(s) re3_debug("[DBG-2]: %s\n",s)
+#else
+#include <android/log.h>
+#define OutputDebugString(s) __android_log_print(ANDROID_LOG_DEBUG, "DBG-2", "%s\n", s)
+
+#endif
 #endif
 
 // Compatible with Linux/POSIX and MinGW on Windows

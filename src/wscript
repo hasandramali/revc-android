@@ -278,7 +278,8 @@ def build(bld):
 	]
 	if bld.env.DEST_OS == 'android':
 		source += [
-			'skel/android/android.cpp'
+			'skel/android/android.cpp',
+			'skel/android/crashhandler.cpp'
 		]
 
 	includes = [
@@ -305,10 +306,11 @@ def build(bld):
 		'extras',
 		'save',
 		'audio/eax',
+		'skel/android/libunwind',
 	]
 	defines = []
 
-	libs = ['OPENAL', 'MPG123', 'SNDFILE', 'vendor/librw']
+	libs = ['OPENAL', 'MPG123', 'SNDFILE', 'vendor/librw', 'UNWIND']
 
 	
 	install_path = bld.env.PREFIX
@@ -317,7 +319,7 @@ def build(bld):
 	if bld.env.DEST_OS == 'android':
 		bld.shlib(
 			source=source,
-			target="revc",
+			target="librevc.so",
 			name=PROJECT_NAME,
 			features='c cxx cxxprogram',
 			includes=includes,

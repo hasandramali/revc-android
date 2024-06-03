@@ -1,5 +1,4 @@
 #include "SDL_events.h"
-#include "SDL_video.h"
 #ifdef _WIN32
 #include <shlobj.h>
 #include <basetsd.h>
@@ -52,19 +51,6 @@ long _dwOperatingSystemVersion;
 #include "Font.h"
 #include "MemoryMgr.h"
 
-// This is defined on project-level, via premake5 or cmake
-#ifdef GET_KEYBOARD_INPUT_FROM_X11
-#include <X11/Xlib.h>
-#include <X11/XKBlib.h>
-#define GLFW_EXPOSE_NATIVE_X11
-#include <GLFW/glfw3native.h>
-#endif
-
-#ifdef _WIN32
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
-#endif
-
 #define MAX_SUBSYSTEMS		(16)
 
 rw::EngineOpenParams openParams;
@@ -99,8 +85,8 @@ RwUInt32 gGameState;
 bool mouse1 = false;
 bool mouse2 = false;
 
-int mousePosX = 0;
-int mousePosY = 0;
+float mousePosX = 0.f;
+float mousePosY = 0.f;
 
 bool m_bExpectSyntheticMouseMotion;
 int m_nMouseTargetX;
@@ -108,6 +94,8 @@ int m_nMouseTargetY;
 int m_nWarpDelta;
 int m_nMouseXDelta;
 int m_nMouseYDelta;
+
+const char* dir = "../";
 /*
  *****************************************************************************
  */
@@ -236,7 +224,6 @@ psGrabScreen(RwCamera *pCamera)
 		return image;
 #endif
 	return nil;
-    return 0;
 }
 
 /*
@@ -494,7 +481,7 @@ psInitialize(void)
 #ifndef __APPLE__
  	struct sysinfo systemInfo;
 	sysinfo(&systemInfo);
-	//_dwMemAvailPhys = systemInfo.freeram;
+	_dwMemAvailPhys = systemInfo.freeram;
 	debug("Physical memory size %u\n", systemInfo.totalram);
 	debug("Available physical memory %u\n", systemInfo.freeram);
 #else
@@ -535,8 +522,7 @@ static RwChar **_VMList;
  */
 RwInt32 _psGetNumVideModes()
 {
-	//return RwEngineGetNumVideoModes();
-    return 0;
+	return RwEngineGetNumVideoModes();
 }
  
 /*
@@ -597,7 +583,6 @@ RwChar **_psGetVideoModeList()
 	}
 	
 	return _VMList;
-    return 0;
 }
 
 /*
@@ -646,7 +631,8 @@ psSelectDevice()
 		GnumSubSystems = RwEngineGetNumSubSystems();
 		if ( !GnumSubSystems )
 		{
-			 return FALSE;
+			debug("Error with subSyetemsNum\n");
+			return FALSE;
 		}
 		
 		/* Just to be sure ... */
@@ -669,6 +655,7 @@ psSelectDevice()
 	/* Set the driver to use the correct sub system */
 	if (!RwEngineSetSubSystem(GcurSel))
 	{
+		debug("Setting subsystem error\n");
 		return FALSE;
 	}
 
@@ -742,6 +729,7 @@ psSelectDevice()
 		RwInt32 bestDepth = -1;
 		for(GcurSelVM = 0; GcurSelVM < RwEngineGetNumVideoModes(); GcurSelVM++){
 			RwEngineGetVideoModeInfo(&vm, GcurSelVM);
+			debug("videmode number %d, vm info: %d , %d , %d", GcurSelVM, vm.width, vm.height, vm.flags);
 
 			if (!(vm.flags & rwVIDEOMODEEXCLUSIVE)){
 				bestWndMode = GcurSelVM;
@@ -759,7 +747,7 @@ psSelectDevice()
 		}
 
 		if(bestFsMode < 0){
-			printf("WARNING: Cannot find desired video mode, selecting device cancelled\n");
+			debug("WARNING: Cannot find desired video mode, selecting device cancelled\n %d", bestFsMode);
 			return FALSE;
 		}
 		GcurSelVM = bestFsMode;
@@ -791,6 +779,7 @@ psSelectDevice()
 	* dimensions to match */
 	if (!RwEngineSetVideoMode(GcurSelVM))
 	{
+		debug("Setting videomode error\n");
 		return FALSE;
 	}
 	/*
@@ -832,7 +821,7 @@ psSelectDevice()
 #endif
 	m_nMouseTargetX = RsGlobal.width / 2;
 	m_nMouseTargetY = RsGlobal.width / 2;
-	m_nWarpDelta = Max( RsGlobal.width / 3, 200 );
+	m_nWarpDelta = Max( RsGlobal.width / 5, 20 );
 	return TRUE;
 }
 
@@ -930,6 +919,18 @@ initkeymap(void)
     keymap[SDL_SCANCODE_F12] = rsF12;
 }
 
+void SDL_Active()
+{
+	Uint32 flags = SDL_GetWindowFlags(PSGLOBAL(window));;
+	if((flags & SDL_WINDOW_HIDDEN))
+	{
+		WindowFocused = FALSE;
+	}
+	else{
+		WindowFocused = TRUE;
+	}
+}
+
 void SDL_Events(SDL_Event *event)
 {
 	switch (event->type) 
@@ -938,8 +939,10 @@ void SDL_Events(SDL_Event *event)
 			RsGlobal.quit = true;
 			break;
 		case SDL_MOUSEMOTION:
-			if (FrontEndMenuManager.m_bMenuActive)
+			if (FrontEndMenuManager.m_bMenuActive && WindowFocused)
 			{
+				if(SDL_GetRelativeMouseMode())
+					SDL_SetRelativeMouseMode(SDL_FALSE);
 				int winw, winh;
 				SDL_GetWindowSize(PSGLOBAL(window), &winw, &winh);
 				
@@ -949,31 +952,19 @@ void SDL_Events(SDL_Event *event)
 				FrontEndMenuManager.m_nMouseTempPosY = ypos * (RsGlobal.maximumHeight / winh);
 				break;
 			}
-			else{
-					if ( m_bExpectSyntheticMouseMotion &&
-					event->motion.x == m_nMouseTargetX &&
-					event->motion.y == m_nMouseTargetY )
-					{
-						m_bExpectSyntheticMouseMotion = false;
-						break;
-					}
-					m_nMouseXDelta += event->motion.xrel;
-					m_nMouseYDelta += event->motion.yrel;
-
-				if (lastCursorMode == SDL_DISABLE &&
-					(event->motion.x < m_nMouseTargetX - m_nWarpDelta ||
-					 event->motion.x > m_nMouseTargetX + m_nWarpDelta ||
-					 event->motion.y < m_nMouseTargetY - m_nWarpDelta ||
-					 event->motion.y > m_nMouseTargetY + m_nWarpDelta) )
-				{
-					// We have strayed outside of our desired area, so
-					// warp the cursor back to the middle of the window.
-					SDL_WarpMouseInWindow( PSGLOBAL(window), m_nMouseTargetX, m_nMouseTargetY );
-					m_bExpectSyntheticMouseMotion = true;
-				}
-				mousePosX = event->motion.x;
-				mousePosY = event->motion.y;
-
+			else
+			{
+				if(!WindowFocused)
+					break;
+				if(!SDL_GetRelativeMouseMode())
+					SDL_SetRelativeMouseMode(SDL_TRUE);
+				static int xposabs = m_nMouseTargetX;
+				static int yposabs = m_nMouseTargetX;
+				xposabs+= event->motion.xrel;
+				yposabs+= event->motion.yrel;
+				
+				mousePosX = xposabs;
+				mousePosY = yposabs;
 				}
 		case SDL_MOUSEBUTTONDOWN:
 			if(event->button.button == SDL_BUTTON_LEFT)
@@ -1014,9 +1005,47 @@ void SDL_Events(SDL_Event *event)
 					RsKeyboardEventHandler(rsKEYUP, &ks);
 				}
                 break;
+		case SDL_MOUSEWHEEL:
+			PSGLOBAL(mouseWheel) = event->wheel.y;
+			break;
+		
+		case SDL_WINDOWEVENT:
+			switch(event->window.event)
+			{
+			case SDL_WINDOWEVENT_RESIZED:
+			case SDL_WINDOWEVENT_SIZE_CHANGED:
+				int w,h;
+				SDL_GetWindowSize(PSGLOBAL(window),&w ,&h );
+				if (RwInitialised && gGameState == GS_PLAYING_GAME)
+				{
+					RsEventHandler(rsIDLE, (void *)TRUE);
+				}
+				if (RwInitialised && w > 0 && h > 0) {
+				RwRect r;
+
+				// TODO fix artifacts of resizing with mouse
+				RsGlobal.maximumHeight = h;
+				RsGlobal.maximumWidth = w;
+
+				r.x = 0;
+				r.y = 0;
+				r.w = w;
+				r.h = h;
+
+				RsEventHandler(rsCAMERASIZE, &r);
+				}
+				break;
+			}
+			break;
+		case SDL_FINGERDOWN:
+			mouse1 = true;
+			break;
+		case SDL_FINGERUP:
+				mouse1 = false;
+				break;
 		default:
 				mouse1 = false;
-				mouse2 = false;
+				mouse2 = false;				
 	}
 }
 
@@ -1035,13 +1064,9 @@ void psPostRWinit(void)
 	RwVideoMode vm;
 	RwEngineGetVideoModeInfo(&vm, GcurSelVM);
 
-	/*glfwSetFramebufferSizeCallback(PSGLOBAL(window), resizeCB); FIXME
-	glfwSetKeyCallback(PSGLOBAL(window), keypressCB);
-	glfwSetScrollCallback(PSGLOBAL(window), scrollCB);
-	glfwSetCursorPosCallback(PSGLOBAL(window), cursorCB);
+	/* FIXME
 	glfwSetCursorEnterCallback(PSGLOBAL(window), cursorEnterCB);
 	glfwSetWindowIconifyCallback(PSGLOBAL(window), windowIconifyCB);
-	glfwSetWindowFocusCallback(PSGLOBAL(window), windowFocusCB);
 	glfwSetJoystickCallback(joysChangeCB);
 
 	_InputInitialiseJoys();
@@ -1313,7 +1338,6 @@ WinMain(HINSTANCE instance,
 	}
 #endif
 
-
 #else
 int
 main(int argc, char *argv[])
@@ -1339,7 +1363,16 @@ main(int argc, char *argv[])
 	sigaction(SIGUSR1, &sa, NULL);
 #endif
 #endif
-
+	
+	for(i=1; i < argc; i++)
+	{
+		if(strcmp(argv[i], "--dir") == 0 && i + 1 < argc)
+		{
+			const char *gamePath = argv[i+1];
+			setenv("GAMEFILES", gamePath, 1);
+		}
+	}
+	
 	/* 
 	 * Initialize the platform independent data.
 	 * This will in turn initialize the platform specific data...
@@ -1349,6 +1382,10 @@ main(int argc, char *argv[])
 		return FALSE;
 	}
 
+	for(i=1; i<argc; i++)
+	{
+		RsEventHandler(rsPREINITCOMMANDLINE, argv[i]);
+	}
 #ifdef _WIN32
 	/*
 	 * Get proper command line params, cmdLine passed to us does not
@@ -1367,11 +1404,6 @@ main(int argc, char *argv[])
 	 * a time BEFORE RenderWare initialization...
 	 */
 #endif
-	for(i=1; i<argc; i++)
-	{
-		RsEventHandler(rsPREINITCOMMANDLINE, argv[i]);
-	}
-
 	/*
 	 * Parameters to be used in RwEngineOpen / rsRWINITIALISE event
 	 */
@@ -1545,6 +1577,7 @@ main(int argc, char *argv[])
 #ifndef LIBRW_SDL2			
 			//glfwPollEvents();
 #else
+			SDL_Active();
 			SDL_Event e;
 			while (SDL_PollEvent(&e) != 0){
 				SDL_Events(&e);
@@ -1898,3 +1931,11 @@ main(int argc, char *argv[])
 
 	return 0;
 }
+
+#ifdef ANDROID
+int start(int argc, char *argv[])
+{
+	int result = SDL_main(argc, argv);
+	return result;
+}
+#endif

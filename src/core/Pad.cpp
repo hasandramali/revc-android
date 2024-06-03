@@ -995,6 +995,7 @@ void CPad::UpdateMouse()
 
 		PSGLOBAL(lastMousePos.x) = mousePosX;
 		PSGLOBAL(lastMousePos.y) = mousePosY;
+		PSGLOBAL(mouseWheel) = 0;
 
 		OldMouseControllerState = NewMouseControllerState;
 		NewMouseControllerState = PCTempMouseControllerState;

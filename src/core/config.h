@@ -164,7 +164,7 @@ enum Config {
 #define GTA_VERSION	GTAVC_PC_11
 
 // Enable configuration for handheld console ports
-#if defined(__SWITCH__) || defined(PSP2)
+#if defined(__SWITCH__) || defined(PSP2) || defined (ANDROID)
 	#define GTA_HANDHELD
 #endif
 
@@ -485,7 +485,7 @@ static_assert(false, "SUPPORT_XBOX_SCRIPT and SUPPORT_MOBILE_SCRIPT are mutually
 #endif
 
 #ifdef GTA_HANDHELD
-	#define IGNORE_MOUSE_KEYBOARD // ignore mouse & keyboard input
+//	#define IGNORE_MOUSE_KEYBOARD // ignore mouse & keyboard input
 #endif
 
 #ifdef __SWITCH__
