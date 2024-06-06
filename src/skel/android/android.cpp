@@ -9,7 +9,7 @@ extern void InitCrashHandler();
 extern "C" JNIEXPORT void JNICALL
 Java_com_sh0zer_revc_LauncherActivity_setenv(JNIEnv *env, jobject obj, jstring value)
 {
-    __android_log_print(ANDROID_LOG_DEBUG,"NIGGER", "Java_com_sh0zer_LauncherActivity_setenv %s",env->GetStringUTFChars(value, NULL));
+    __android_log_print(ANDROID_LOG_DEBUG,"REVC-DEBUG", "Java_com_sh0zer_LauncherActivity_setenv %s",env->GetStringUTFChars(value, NULL));
     setenv("GAMEFILES", env->GetStringUTFChars(value, NULL), 1);
 }
 

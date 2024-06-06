@@ -5,7 +5,6 @@
 #include <math.h>
 #include <ctype.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "rwcore.h"
 
@@ -313,7 +312,6 @@ RsRwInitialize(void *displayID)
 	 
 	if (!RwEngineInit(psGetMemoryFunctions(), 0, rsRESOURCESDEFAULTARENASIZE))
 	{
-		debug("Engine init error\n");
 		return (FALSE);
 	}
 
@@ -332,7 +330,6 @@ RsRwInitialize(void *displayID)
 	 */
 	if (RsEventHandler(rsPLUGINATTACH, nil) == rsEVENTERROR)
 	{
-		debug("plugin attachment error\n");
 		return (FALSE);
 	}
 
@@ -341,7 +338,6 @@ RsRwInitialize(void *displayID)
 	 */
 	if (RsEventHandler(rsINPUTDEVICEATTACH, nil) == rsEVENTERROR)
 	{
-		debug("Input device attachement error\n");
 		return (FALSE);
 	}
 	
@@ -349,14 +345,12 @@ RsRwInitialize(void *displayID)
 
 	if (!RwEngineOpen(&openParams))
 	{
-		debug("RW opening error\n");
 		RwEngineTerm();
 		return (FALSE);
 	}
 	
 	if (RsEventHandler(rsSELECTDEVICE, displayID) == rsEVENTERROR)
 	{
-		debug("Selectin device error\n");
 		RwEngineClose();
 		RwEngineTerm();
 		return (FALSE);
@@ -364,7 +358,6 @@ RsRwInitialize(void *displayID)
 	
 	if (!RwEngineStart())
 	{
-		debug("Engine startup error\n");
 		RwEngineClose();
 		RwEngineTerm();
 		return (FALSE);

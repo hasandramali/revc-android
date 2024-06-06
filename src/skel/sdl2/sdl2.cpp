@@ -87,15 +87,6 @@ bool mouse2 = false;
 
 float mousePosX = 0.f;
 float mousePosY = 0.f;
-
-bool m_bExpectSyntheticMouseMotion;
-int m_nMouseTargetX;
-int m_nMouseTargetY;
-int m_nWarpDelta;
-int m_nMouseXDelta;
-int m_nMouseYDelta;
-
-const char* dir = "../";
 /*
  *****************************************************************************
  */
@@ -331,13 +322,6 @@ psInitialize(void)
  	
  	PsGlobal.joy1id	= -1;
  	PsGlobal.joy2id	= -1;
-	m_bExpectSyntheticMouseMotion = false;
-	m_nMouseTargetX = 0;
-	m_nMouseTargetY = 0;
-	m_nWarpDelta = 0;
-	m_nMouseXDelta = 0;
-	m_nMouseYDelta = 0;
- 
     CFileMgr::Initialise();
 	
 #ifdef PS2_MENU
@@ -631,7 +615,6 @@ psSelectDevice()
 		GnumSubSystems = RwEngineGetNumSubSystems();
 		if ( !GnumSubSystems )
 		{
-			debug("Error with subSyetemsNum\n");
 			return FALSE;
 		}
 		
@@ -655,7 +638,6 @@ psSelectDevice()
 	/* Set the driver to use the correct sub system */
 	if (!RwEngineSetSubSystem(GcurSel))
 	{
-		debug("Setting subsystem error\n");
 		return FALSE;
 	}
 
@@ -729,7 +711,6 @@ psSelectDevice()
 		RwInt32 bestDepth = -1;
 		for(GcurSelVM = 0; GcurSelVM < RwEngineGetNumVideoModes(); GcurSelVM++){
 			RwEngineGetVideoModeInfo(&vm, GcurSelVM);
-			debug("videmode number %d, vm info: %d , %d , %d", GcurSelVM, vm.width, vm.height, vm.flags);
 
 			if (!(vm.flags & rwVIDEOMODEEXCLUSIVE)){
 				bestWndMode = GcurSelVM;
@@ -779,7 +760,6 @@ psSelectDevice()
 	* dimensions to match */
 	if (!RwEngineSetVideoMode(GcurSelVM))
 	{
-		debug("Setting videomode error\n");
 		return FALSE;
 	}
 	/*
@@ -818,10 +798,7 @@ psSelectDevice()
 
 #ifdef MULTISAMPLING
 	RwD3D8EngineSetMultiSamplingLevels(1 << FrontEndMenuManager.m_nPrefsMSAALevel);
-#endif
-	m_nMouseTargetX = RsGlobal.width / 2;
-	m_nMouseTargetY = RsGlobal.width / 2;
-	m_nWarpDelta = Max( RsGlobal.width / 5, 20 );
+#endif	
 	return TRUE;
 }
 
@@ -958,8 +935,8 @@ void SDL_Events(SDL_Event *event)
 					break;
 				if(!SDL_GetRelativeMouseMode())
 					SDL_SetRelativeMouseMode(SDL_TRUE);
-				static int xposabs = m_nMouseTargetX;
-				static int yposabs = m_nMouseTargetX;
+				static int xposabs;
+				static int yposabs;
 				xposabs+= event->motion.xrel;
 				yposabs+= event->motion.yrel;
 				
@@ -1931,11 +1908,3 @@ main(int argc, char *argv[])
 
 	return 0;
 }
-
-#ifdef ANDROID
-int start(int argc, char *argv[])
-{
-	int result = SDL_main(argc, argv);
-	return result;
-}
-#endif
