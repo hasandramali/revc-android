@@ -50,11 +50,14 @@ def options(opt):
 	grp.add_option('-D', '--debug-engine', action = 'store_true', dest = 'DEBUG_ENGINE', default = False,
 		help = 'build with -DDEBUG [default: %default]')
 	
+	grp.add_option('--sanitize', action = 'store', dest = 'SANITIZE', default = '',
+		help = 'build with sanitizers [default: %default]')
+	
 	opt.load('subproject compiler_optimizations')
 
 	opt.add_subproject(projects)
 
-	opt.load('xcompile compiler_cxx compiler_c sdl2 clang_compilation_database strip_on_install waf_unit_test subproject')
+	opt.load('xcompile compiler_cxx compiler_c clang_compilation_database waf_unit_test subproject strip_on_install')
 	if sys.platform == 'win32':
 		opt.load('msvc msdev msvs')
 	opt.load('reconfigure')
@@ -67,26 +70,22 @@ def check_deps(conf):
 			conf.check_cfg(package='openal', uselib_store='OPENAL', args=['--cflags', '--libs'])
 			conf.check_cfg(package='libmpg123', uselib_store='MPG123', args=['--cflags', '--libs'])
 			conf.check_cfg(package='sndfile', uselib_store='SNDFILE', args=['--cflags', '--libs'])
-			conf.check_cfg(package='gl', uselib_store='GL', args=['--cflags', '--libs'])
-			conf.check_cfg(package='x11', uselib_store='X11', args=['--cflags', '--libs'])
-			conf.check_cfg(package='glfw3', uselib_store='GLFW', args=['--cflags', '--libs'])
+	else:
+		conf.check(lib='SDL2', uselib_store='SDL2')
+		if conf.env.DEST_CPU != 'aarch64':
+			conf.check(lib='unwind', uselib_store='UNWIND')
+			conf.check(lib='crypto', uselib_store='CRYPTO')
+			conf.check(lib='ssl', uselib_store='SSL')
+		conf.check(lib='android_support', uselib_store='ANDROID_SUPPORT')
+		conf.check(lib='openal', uselib_store='OPENAL')
+		conf.check(lib='mpg123')
+		conf.check(lib='unwind', uselib_store='UNWIND')
 
 
 def configure(conf):
+	
+	conf.load('subproject xcompile compiler_c compiler_cxx gccdeps gitversion clang_compilation_database waf_unit_test enforce_pic strip_on_install')
 	conf.load('fwgslib reconfigure compiler_optimizations')
-
-	# Force XP compability, all build targets should add
-	# subsystem=bld.env.MSVC_SUBSYSTEM
-	# TODO: wrapper around bld.stlib, bld.shlib and so on?
-	conf.env.MSVC_SUBSYSTEM = 'WINDOWS,5.01'
-	conf.env.MSVC_TARGETS = ['x64'] # explicitly request x86 target for MSVC
-	if conf.options.TARGET32:
-		conf.env.MSVC_TARGETS = ['x86']
-
-	if sys.platform == 'win32':
-		conf.load('msvc_pdb_ext msdev msvs msvcdeps')
-	conf.load('subproject xcompile compiler_c compiler_cxx gccdeps gitversion clang_compilation_database waf_unit_test enforce_pic')
-
 	conf.env.BIT32_MANDATORY = conf.options.TARGET32
 	if conf.env.BIT32_MANDATORY:
 		Logs.info('WARNING: will build engine for 32-bit target')
@@ -95,6 +94,17 @@ def configure(conf):
 	if conf.options.DEBUG_ENGINE:
 		conf.env.append_unique('DEFINES', [
 			'DEBUG'
+		])
+		
+	if conf.env.DEST_OS == 'android':
+		conf.env.append_unique('DEFINES', [
+			'ANDROID=1', '_ANDROID=1',
+			'LINUX=1', '_LINUX=1',
+			'POSIX=1', '_POSIX=1',
+			'GNUC',
+			'NO_HOOK_MALLOC',
+			'_DLL_EXT=.so',
+			'AL_LIBTYPE_STATIC'
 		])
 
 	if conf.options.DISABLE_WARNS:
@@ -125,40 +135,48 @@ def configure(conf):
 
 	flags = []
 	
-	if conf.env.DEST_OS != 'win32':
-		flags += ['-pipe', '-fPIC', '-L'+os.path.abspath('.') + 'build/vendor']
-	if conf.env.COMPILER_CC != 'msvc':
-		flags += ['-pthread']
+	if conf.options.SANITIZE:
+		flags += ['-fsanitize=%s'%conf.options.SANITIZE]
+	
+	if conf.env.DEST_OS == 'android':
+		flags += [
+			'-I'+os.path.abspath('.')+'/vendor/SDL',
+			'-I'+os.path.abspath('.')+'/vendor/openal-soft-old/include/',
+			'-I'+os.path.abspath('.')+'/vendor/mpg123/include/',
+			'-llog'
+		]
+	
+	flags += ['-pipe', '-fPIC', '-L'+os.path.abspath('.')+'/lib/'+conf.env.DEST_OS+'/'+conf.env.DEST_CPU+'/']
+	flags += ['-pthread']
 	flags += ['-funwind-tables', '-g']
 	
-	if conf.env.DEST_OS != 'win32':
-		cflags += flags
-		linkflags += flags
+	cflags += flags
+	linkflags += flags
 
 	cxxflags = list(cflags)
-	if conf.env.DEST_OS != 'win32':
-		cxxflags += ['-std=c++11','-fpermissive']
+	cxxflags += ['-std=c++11','-fpermissive']
 
 	if conf.env.COMPILER_CC == 'gcc':
 		conf.define('COMPILER_GCC', 1)
+		
+	conf.check_cc(cflags=cflags, linkflags=linkflags, msg='Checking for required C flags')
+	conf.check_cxx(cxxflags=cxxflags, linkflags=linkflags, msg='Checking for required C++ flags')
+	
+	conf.env.append_unique('CFLAGS', cflags)
+	conf.env.append_unique('CXXFLAGS', cxxflags)
+	conf.env.append_unique('LINKFLAGS', linkflags)
 
-	if conf.env.COMPILER_CC != 'msvc':
-		conf.check_cc(cflags=cflags, linkflags=linkflags, msg='Checking for required C flags')
-		conf.check_cxx(cxxflags=cxxflags, linkflags=linkflags, msg='Checking for required C++ flags')
-
-		conf.env.append_unique('CFLAGS', cflags)
-		conf.env.append_unique('CXXFLAGS', cxxflags)
-		conf.env.append_unique('LINKFLAGS', linkflags)
-
-		cxxflags += conf.filter_cxxflags(compiler_optional_flags, cflags)
-		cflags += conf.filter_cflags(compiler_optional_flags + c_compiler_optional_flags, cflags)
+	cxxflags += conf.filter_cxxflags(compiler_optional_flags, cflags)
+	cflags += conf.filter_cflags(compiler_optional_flags + c_compiler_optional_flags, cflags)
 
 	conf.env.append_unique('CFLAGS', cflags)
 	conf.env.append_unique('CXXFLAGS', cxxflags)
 	conf.env.append_unique('LINKFLAGS', linkflags)
-	conf.env.append_unique('INCLUDES', [os.path.abspath('common/')])
 
 	check_deps( conf )
 	conf.add_subproject(projects)
 def build(bld):
+	if bld.env.DEST_OS == 'android':
+		sdl_path = os.path.join('lib', bld.env.DEST_OS, bld.env.DEST_CPU, 'libSDL2.so')
+		bld.install_files(bld.env.LIBDIR, [sdl_path])
 	bld.add_subproject(projects)
