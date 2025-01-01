@@ -90,12 +90,13 @@ typedef struct
     RwV2d		lastMousePos;
     int      mouseWheel; // glfw doesn't cache it
     bool        cursorIsInWindow;
-    RwInt8        joy1id;
-    RwInt8        joy2id;
+    SDL_Joystick*        joy1;
+    SDL_Joystick*        joy2;
 }
 psGlobalType;
 
 #define PSGLOBAL(var) (((psGlobalType *)(RsGlobal.ps))->var)
+void CapturePad(RwInt32 padID);
 
 enum eGameState
 {

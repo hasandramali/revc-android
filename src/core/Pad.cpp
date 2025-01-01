@@ -1067,8 +1067,8 @@ CControllerState CPad::ReconcileTwoControllersInput(CControllerState const &Stat
 
 void CPad::StartShake(int16 nDur, uint8 nFreq)
 {
-	if ( !FrontEndMenuManager.m_PrefsUseVibration )
-		return;
+	// if ( !FrontEndMenuManager.m_PrefsUseVibration )
+	// 	return;
 
 	if ( CCutsceneMgr::IsRunning() || CGame::playingIntro )
 		return;
@@ -1089,8 +1089,8 @@ void CPad::StartShake(int16 nDur, uint8 nFreq)
 
 void CPad::StartShake_Distance(int16 nDur, uint8 nFreq, float fX, float fY, float fZ)
 {
-	if ( !FrontEndMenuManager.m_PrefsUseVibration )
-		return;
+	// if ( !FrontEndMenuManager.m_PrefsUseVibration )
+	// 	return;
 
 	if ( CCutsceneMgr::IsRunning() || CGame::playingIntro )
 		return;
@@ -1116,8 +1116,8 @@ void CPad::StartShake_Distance(int16 nDur, uint8 nFreq, float fX, float fY, floa
 
 void CPad::StartShake_Train(float fX, float fY)
 {
-	if ( !FrontEndMenuManager.m_PrefsUseVibration )
-		return;
+	// if ( !FrontEndMenuManager.m_PrefsUseVibration )
+	// 	return;
 
 	if ( CCutsceneMgr::IsRunning() || CGame::playingIntro )
 		return;
@@ -1698,7 +1698,7 @@ void CPad::UpdatePads(void)
 #ifdef XINPUT
 	GetPad(0)->AffectFromXinput(m_bMapPadOneToPadTwo ? 1 : 0);
 	GetPad(1)->AffectFromXinput(m_bMapPadOneToPadTwo ? 0 : 1);
-//#else
+#else
 	CapturePad(0);
 #endif
 

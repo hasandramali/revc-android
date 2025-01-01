@@ -141,7 +141,7 @@ def configure(conf):
 	if conf.env.DEST_OS == 'android':
 		flags += [
 			'-I'+os.path.abspath('.')+'/vendor/SDL',
-			'-I'+os.path.abspath('.')+'/vendor/openal-soft-old/include/',
+			'-I'+os.path.abspath('.')+'/vendor/openal-soft/include/',
 			'-I'+os.path.abspath('.')+'/vendor/mpg123/include/',
 			'-llog'
 		]
@@ -173,8 +173,14 @@ def configure(conf):
 	conf.env.append_unique('CXXFLAGS', cxxflags)
 	conf.env.append_unique('LINKFLAGS', linkflags)
 
+	if conf.env.DEST_OS == 'android':
+		conf.env.PREFIX = conf.env.PREFIX.replace('/lib', '') #fuck this
+		conf.env.LIBDIR = conf.env.BINDIR = conf.env.PREFIX
+	
+
 	check_deps( conf )
 	conf.add_subproject(projects)
+
 def build(bld):
 	if bld.env.DEST_OS == 'android':
 		sdl_path = os.path.join('lib', bld.env.DEST_OS, bld.env.DEST_CPU, 'libSDL2.so')

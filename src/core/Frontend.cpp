@@ -1,3 +1,4 @@
+#include "SDL_joystick.h"
 #define FORCE_PC_SCALING
 #define WITHWINDOWS
 #define WITHDINPUT
@@ -430,20 +431,20 @@ CMenuManager::SwitchToNewScreen(int8 screen)
 	DoRWStuffStartOfFrame(0, 0, 0, 0, 0, 0, 255);
 	DrawBackground(true);
 	DoRWStuffEndOfFrame();
-	DoRWStuffStartOfFrame(0, 0, 0, 0, 0, 0, 255);
-	DrawBackground(true);
-	DoRWStuffEndOfFrame();
+	// DoRWStuffStartOfFrame(0, 0, 0, 0, 0, 0, 255);
+	// DrawBackground(true);
+	// DoRWStuffEndOfFrame(); why twice
 	m_nPrevScreen = m_nCurrScreen;
 	m_ShowEmptyBindingError = false;
 	ResetHelperText();
-
+ 
 	ThingsToDoBeforeLeavingPage();
 
 	if (screen == -2) {
 		int oldScreen = aScreens[m_nCurrScreen].m_PreviousPage;
 		int oldOption = GetPreviousPageOption();
-
-		m_nCurrOption = oldOption;
+ 
+		m_nCurrOption = 0;
 		m_nCurrScreen = oldScreen;
 	} else if (screen == 0) {
 		m_nCurrScreen = aScreens[m_nCurrScreen].m_aEntries[m_nCurrOption].m_TargetMenu;
@@ -456,7 +457,7 @@ CMenuManager::SwitchToNewScreen(int8 screen)
 	
 	if (hasNativeList(m_nPrevScreen))
 		m_nTotalListRow = 0;
-
+ 
 	if (m_nCurrScreen == MENUPAGE_CHOOSE_SAVE_SLOT)
 		m_nCurrOption = 8;
 	m_nMenuFadeAlpha = 0;
@@ -608,7 +609,7 @@ CMenuManager::Initialise(void)
 		firstTime = false;
 	} else
 #endif
-	m_PrefsRadioStation = DMAudio.GetRadioInCar();
+		m_PrefsRadioStation = DMAudio.GetRadioInCar();
 
 	DMAudio.SetMP3BoostVolume(m_PrefsMP3BoostVolume);
 	if (DMAudio.IsMP3RadioChannelAvailable()) {
@@ -2443,8 +2444,7 @@ CMenuManager::DrawBackground(bool transitionCall)
 	if (m_nMenuFadeAlpha < 255) {
 		static uint8 forceFadeInCounter = 0;	
 		if (CTimer::GetTimeInMillisecondsPauseMode() - LastFade > 30
-			|| forceFadeInCounter > 30
-			) {
+		|| forceFadeInCounter > 30) {
 			m_nMenuFadeAlpha += 20;
 			if (m_firstStartCounter < 255) {
 				m_firstStartCounter = Min(m_firstStartCounter + 20, 255);
@@ -2534,7 +2534,6 @@ CMenuManager::DrawBackground(bool transitionCall)
 
 		mouse.Translate(m_nMousePosX, m_nMousePosY);
 		shad.Translate(m_nMousePosX, m_nMousePosY);
-		//printf("%d asas %d\n", m_nMousePosX, m_nMousePosY);
 		
 		m_aFrontEndSprites[MENUSPRITE_MOUSE].Draw(shad, CRGBA(100, 100, 100, 50));
 		m_aFrontEndSprites[MENUSPRITE_MOUSE].Draw(mouse, CRGBA(255, 255, 255, 255));
@@ -2545,7 +2544,6 @@ void
 CMenuManager::DrawPlayerSetupScreen(bool activeScreen)
 {
 	RESET_FONT_FOR_NEW_PAGE
-
 	// lstrcpy's changed with strcpy
 	if (!m_bSkinsEnumerated) {
 		OutputDebugString("Enumerating skin filenames from skins...");
@@ -2966,13 +2964,13 @@ CMenuManager::InitialiseChangedLanguageSettings()
 #ifdef FIX_BUGS
 		if (gGameState > GS_INIT_ONCE)
 #endif
-		CTimer::Stop();
+			CTimer::Stop();
 		TheText.Unload();
 		TheText.Load();
 #ifdef FIX_BUGS
 		if (gGameState > GS_INIT_ONCE)
 #endif
-		CTimer::Update();
+			CTimer::Update();
 		CGame::frenchGame = false;
 		CGame::germanGame = false;
 #ifdef MORE_LANGUAGES
@@ -4609,7 +4607,6 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 				MouseButtonJustClicked = rsMOUSEX2BUTTON;
 
 			JoyButtonJustClicked = ControlsManager.GetJoyButtonJustDown();
-
 			int32 TypeOfControl = KEYBOARD;
 			if (JoyButtonJustClicked)
 				TypeOfControl = JOYSTICK;
@@ -4949,10 +4946,10 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 						PSGLOBAL(joy1)->GetCapabilities(&devCaps);
 						ControlsManager.InitDefaultControlConfigJoyPad(devCaps.dwButtons);
 					}
-//#else FIXME
-					if (PSGLOBAL(joy1id) != -1 && glfwJoystickPresent(PSGLOBAL(joy1id))) {
+#else
+					if (PSGLOBAL(joy1) != NULL) {
 						int count;
-						glfwGetJoystickButtons(PSGLOBAL(joy1id), &count);
+						count = SDL_JoystickNumButtons(PSGLOBAL(joy1));
 						ControlsManager.InitDefaultControlConfigJoyPad(count);
 					}
 #endif

@@ -1,4 +1,6 @@
-#include "SDL_events.h"
+#include "SDL.h"
+#include "SDL_gamecontroller.h"
+#include "SDL_joystick.h"
 #ifdef _WIN32
 #include <shlobj.h>
 #include <basetsd.h>
@@ -308,6 +310,25 @@ psNativeTextureSupport(void)
 #define CMDSTR	LPSTR
 #endif
 
+static void _psInitializeVibration() {}
+static void _psHandleVibration() 
+{
+	CPad* pad = CPad::GetPad(0);
+
+	if (pad->ShakeDur < CTimer::GetTimeStepInMilliseconds())
+		pad->ShakeDur = 0;
+	else
+		pad->ShakeDur -= CTimer::GetTimeStepInMilliseconds();
+	if (pad->ShakeDur == 0) pad->ShakeFreq = 0;
+
+	uint16 freq_low = pad->ShakeFreq == 0.0 ? 160.0f : pad->ShakeFreq * 3;
+	uint16 freq_high = pad->ShakeFreq == 0.0 ? 320.0f : pad->ShakeFreq * 3;
+	printf("pad->ShakeFreq: %d, pad->ShakeDur: %d\n",freq_low, freq_high);
+	if(pad->ShakeFreq > 0)
+		SDL_JoystickRumble(PSGLOBAL(joy1),freq_low,freq_high, 1);
+
+}
+
 RwBool
 psInitialize(void)
 {
@@ -320,8 +341,8 @@ psInitialize(void)
  	WindowFocused = TRUE;
  	WindowIconified = FALSE;
  	
- 	PsGlobal.joy1id	= -1;
- 	PsGlobal.joy2id	= -1;
+ 	PsGlobal.joy1 = NULL;
+ 	PsGlobal.joy2 = NULL;
     CFileMgr::Initialise();
 	
 #ifdef PS2_MENU
@@ -384,7 +405,7 @@ psInitialize(void)
 
 #endif
 
-	//_psInitializeVibration();
+	_psInitializeVibration();
 	
 	gGameState = GS_START_UP;
 	TRACE("gGameState = GS_START_UP");
@@ -802,6 +823,35 @@ psSelectDevice()
 	return TRUE;
 }
 
+void _InputInitialiseJoys()
+{
+	PSGLOBAL(joy1) = NULL;
+	PSGLOBAL(joy2) = NULL;
+	
+	printf("SDL_NumJoysticks : %d\n", SDL_NumJoysticks());
+	for(int i = 0; i < SDL_NumJoysticks(); i++)
+	{
+		if(SDL_IsGameController(i)){
+			if(PSGLOBAL(joy1) == NULL)
+				PSGLOBAL(joy1) = SDL_JoystickOpen(i);
+			else if (PSGLOBAL(joy2) == NULL)
+				PSGLOBAL(joy2) = SDL_JoystickOpen(i);
+			else
+				break;
+			
+		}
+	}
+	if (PSGLOBAL(joy1) != NULL) {
+		int count;
+		count = SDL_JoystickNumButtons(PSGLOBAL(joy1));
+// #ifdef DETECT_JOYSTICK_MENU
+// 		strcpy(gSelectedJoystickName, glfwGetJoystickName(PSGLOBAL(joy1)));
+// #endif
+		ControlsManager.InitDefaultControlConfigJoyPad(count);
+	}
+}
+
+
 int lastCursorMode = SDL_DISABLE;
 int keymap[SDL_NUM_SCANCODES];
 bool lshiftStatus = false;
@@ -908,8 +958,38 @@ void SDL_Active()
 	}
 }
 
+void Joy_Events(SDL_Event *event)
+{
+	RsPadButtonStatus bs;
+	bs.padID = 0;
+	switch(event->type)
+	{
+		case SDL_CONTROLLERDEVICEADDED:
+			_InputInitialiseJoys();
+			break;
+		case SDL_CONTROLLERDEVICEREMOVED:
+			_InputInitialiseJoys();
+			break;
+		case SDL_JOYBUTTONDOWN:
+		case SDL_JOYBUTTONUP:
+			if (PSGLOBAL(joy1) && event->cdevice.which == SDL_JoystickInstanceID(PSGLOBAL(joy1))) {
+				memcpy(&ControlsManager.m_OldState, &ControlsManager.m_NewState, sizeof(ControlsManager.m_NewState));
+				if(event->type == SDL_JOYBUTTONUP){
+					RsPadEventHandler(rsPADBUTTONUP,   (void *)&bs);	
+					ControlsManager.m_NewState.mappedButtons[event->jbutton.button] = false;	
+				}
+				else{
+					RsPadEventHandler(rsPADBUTTONDOWN, (void *)&bs);
+					ControlsManager.m_NewState.mappedButtons[event->jbutton.button] = true;
+				}
+			}
+			break;
+	}
+}
+
 void SDL_Events(SDL_Event *event)
 {
+	Joy_Events(event);
 	switch (event->type) 
 	{
 		case SDL_QUIT:
@@ -1045,9 +1125,8 @@ void psPostRWinit(void)
 	glfwSetCursorEnterCallback(PSGLOBAL(window), cursorEnterCB);
 	glfwSetWindowIconifyCallback(PSGLOBAL(window), windowIconifyCB);
 	glfwSetJoystickCallback(joysChangeCB);
-
-	_InputInitialiseJoys();
 */
+
 	_InputInitialiseMouse(false);
 	if(!(vm.flags & rwVIDEOMODEEXCLUSIVE))
 		SDL_SetWindowSize(PSGLOBAL(window), RsGlobal.maximumWidth, RsGlobal.maximumHeight);
@@ -1507,7 +1586,12 @@ main(int argc, char *argv[])
 		FrontEndMenuManager.DrawMemoryCardStartUpMenus();
 	}
 #endif
-	
+	if(SDL_InitSubSystem( SDL_INIT_JOYSTICK ))
+	{
+		printf("Failed to initialize SDL GameController API: %s\n", SDL_GetError());
+	}
+	SDL_GameControllerAddMappingsFromFile( "gamecontrollerdb.txt" );
+	_InputInitialiseJoys();
 	initkeymap();
 
 	while ( TRUE )
@@ -1553,7 +1637,7 @@ main(int argc, char *argv[])
 		{
 #ifndef LIBRW_SDL2			
 			//glfwPollEvents();
-#else
+#else	
 			SDL_Active();
 			SDL_Event e;
 			while (SDL_PollEvent(&e) != 0){
@@ -1907,4 +1991,89 @@ main(int argc, char *argv[])
 #endif
 
 	return 0;
+}
+/*
+ *****************************************************************************
+ */
+
+RwV2d leftStickPos;
+RwV2d rightStickPos;
+
+void CapturePad(RwInt32 padID)
+{
+	
+	SDL_Joystick *glfwPad = NULL;
+
+	if( padID == 0 )
+		glfwPad = PSGLOBAL(joy1);
+	else if( padID == 1)
+		glfwPad = PSGLOBAL(joy2);
+	else
+		assert("invalid padID");
+	
+	if ( glfwPad == NULL )
+		return;
+	
+	ControlsManager.m_NewState.isGamepad = SDL_IsGameController(SDL_JoystickInstanceID(glfwPad));
+	
+// 	if (ControlsManager.m_bFirstCapture == false) {
+// 		memcpy(&ControlsManager.m_OldState, &ControlsManager.m_NewState, sizeof(ControlsManager.m_NewState));
+// 	} else {
+// 		ControlsManager.m_NewState.mappedButtons[15] = ControlsManager.m_NewState.mappedButtons[16] = 0;
+// 	}
+// 
+// 	if (ControlsManager.m_bFirstCapture == true) {
+// 		memcpy(&ControlsManager.m_OldState, &ControlsManager.m_NewState, sizeof(ControlsManager.m_NewState));
+// 		
+// 		ControlsManager.m_bFirstCapture = false;
+// 	}
+
+	RsPadButtonStatus bs;
+	bs.padID = padID;
+	{
+		if (CPad::m_bMapPadOneToPadTwo)
+			bs.padID = 1;
+		
+		RsPadEventHandler(rsPADBUTTONUP,   (void *)&bs);
+		RsPadEventHandler(rsPADBUTTONDOWN, (void *)&bs);
+	}
+	
+		
+	float lt =  SDL_JoystickGetAxis(glfwPad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) / (float)SHRT_MAX;
+	float rt = SDL_JoystickGetAxis(glfwPad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) / (float)SHRT_MAX;
+		
+	if (lt != 0.0f)
+		ControlsManager.m_NewState.mappedButtons[15] = lt > -0.8f;
+
+	if (rt != 0.0f)
+		ControlsManager.m_NewState.mappedButtons[16] = rt > -0.8f;
+
+	leftStickPos.y = SDL_JoystickGetAxis(glfwPad, SDL_CONTROLLER_AXIS_LEFTY) / (float)SHRT_MAX;
+		
+	leftStickPos.x = SDL_JoystickGetAxis(glfwPad, SDL_CONTROLLER_AXIS_LEFTX) / (float)SHRT_MAX;
+ 
+	rightStickPos.x =  SDL_JoystickGetAxis(glfwPad, SDL_CONTROLLER_AXIS_RIGHTX) / (float)SHRT_MAX;
+			
+	rightStickPos.y = SDL_JoystickGetAxis(glfwPad, SDL_CONTROLLER_AXIS_RIGHTY) / (float)SHRT_MAX;
+		
+	{
+		if (CPad::m_bMapPadOneToPadTwo)
+			bs.padID = 1;
+		CPad *pad = CPad::GetPad(bs.padID);
+
+		if ( Abs(leftStickPos.x)  > 0.3f )
+			pad->PCTempJoyState.LeftStickX	= (int32)(leftStickPos.x  * 128.0f);
+				
+		if ( Abs(leftStickPos.y)  > 0.3f )
+			pad->PCTempJoyState.LeftStickY	= (int32)(leftStickPos.y  * 128.0f);
+				
+		if ( Abs(rightStickPos.x) > 0.3f )
+			pad->PCTempJoyState.RightStickX = (int32)(rightStickPos.x * 128.0f);
+
+		if ( Abs(rightStickPos.y) > 0.3f )
+			pad->PCTempJoyState.RightStickY = (int32)(rightStickPos.y * 128.0f);
+	}
+	_psHandleVibration();
+
+	return;
 }

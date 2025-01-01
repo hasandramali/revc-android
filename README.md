@@ -8,6 +8,7 @@ All rights reserved to Rockstar Games and original people who reversed it
 
 * Get rid of waifu buildsystem 
 
+
 ## License
 
 We don't feel like we're in a position to give this code a license.\
