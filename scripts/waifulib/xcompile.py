@@ -20,12 +20,12 @@ import os
 import sys
 
 ANDROID_NDK_ENVVARS = ['ANDROID_NDK_HOME', 'ANDROID_NDK']
-ANDROID_NDK_SUPPORTED = [10, 19, 20]
+ANDROID_NDK_SUPPORTED = [10, 19, 20, 27]
 ANDROID_NDK_HARDFP_MAX = 11 # latest version that supports hardfp
 ANDROID_NDK_GCC_MAX = 17 # latest NDK that ships with GCC
 ANDROID_NDK_UNIFIED_SYSROOT_MIN = 15
 ANDROID_NDK_SYSROOT_FLAG_MAX = 19 # latest NDK that need --sysroot flag
-ANDROID_NDK_API_MIN = { 10: 3, 19: 16, 20: 16 } # minimal API level ndk revision supports
+ANDROID_NDK_API_MIN = { 10: 3, 19: 16, 20: 16, 27: 16 } # minimal API level ndk revision supports
 ANDROID_64BIT_API_MIN = 21 # minimal API level that supports 64-bit targets
 
 # This class does support ONLY r10e and r19c/r20 NDK
@@ -215,7 +215,8 @@ class Android:
 		# TODO: proper STL support
 		return [
 			#os.path.abspath(os.path.join(self.ndk_home, 'sources', 'cxx-stl', 'system', 'include')),
-			os.path.abspath(os.path.join(self.ndk_home, 'sources', 'android', 'support', 'include'))
+			#os.path.abspath(os.path.join(self.ndk_home, 'sources', 'android', 'support', 'include'))
+			#os.path.abspath(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1'))
 		]
 
 	def libsysroot(self):
@@ -229,6 +230,8 @@ class Android:
 		return os.path.abspath(os.path.join(self.ndk_home, path))
 
 	def sysroot(self):
+		if self.ndk_rev == 27:
+			return os.path.abspath(os.path.join(self.ndk_home, 'toolchains/llvm/prebuilt/linux-x86_64/sysroot'))
 		if self.ndk_rev >= ANDROID_NDK_UNIFIED_SYSROOT_MIN:
 			return os.path.abspath(os.path.join(self.ndk_home, 'sysroot'))
 		else:
@@ -246,7 +249,8 @@ class Android:
 					'-isystem', '%s/usr/include/' % (self.sysroot())
 				]
 
-		cflags += ['-I%s'%i for i in self.system_stl()]+['-DANDROID', '-D__ANDROID__']
+		#print(self.system_stl())
+		#cflags += ['-DANDROID_STL=c++_static', '-lc++abi']
 
 		if cxx and not self.is_clang() and self.toolchain not in ['4.8','4.9']:
 			cflags += ['-fno-sized-deallocation']
@@ -303,7 +307,7 @@ class Android:
 			ldflags += ['-lgcc']
 
 		if self.is_clang() or self.is_host():
-			ldflags += ['-stdlib=libstdc++']
+			ldflags += ['-stdlib=libc++', '-DANDROID_STL=c++_static','-lc++_static','-lc++abi', '-static-libstdc++']
 		if self.is_arm():
 			if self.arch == 'armeabi-v7a':
 				ldflags += ['-march=armv7-a']
@@ -335,8 +339,9 @@ def configure(conf):
 
 
 		stlarch = values[0]
-		if values[0] == 'aarch64': stlarch = 'arm64-v8a'
-
+		if values[0] == 'aarch64': stlarch = 'aarch64-linux-android'
+		if values[0] == 'armeabi-v7a': stlarch = 'arm-linux-androideabi'
+		
 		conf.android = android = Android(conf, values[0], values[1], int(values[2]))
 		conf.environ['CC'] = android.cc()
 		conf.environ['CXX'] = android.cxx()
@@ -345,12 +350,9 @@ def configure(conf):
 		conf.env.CXXFLAGS += android.cflags(True)
 		conf.env.LINKFLAGS += android.linkflags()
 		conf.env.LDFLAGS += android.ldflags()
-		conf.env.INCLUDES += [
-			os.path.abspath(os.path.join(android.ndk_home, 'sources', 'cxx-stl', 'gnu-libstdc++', '4.9', 'include')),
-			os.path.abspath(os.path.join(android.ndk_home, 'sources', 'cxx-stl', 'gnu-libstdc++', '4.9', 'libs', stlarch, 'include'))
-		]
-		conf.env.STLIBPATH += [os.path.abspath(os.path.join(android.ndk_home, 'sources','cxx-stl','gnu-libstdc++','4.9','libs',stlarch))]
-		conf.env.LDFLAGS += ['-lgnustl_static']
+		conf.env.INCLUDES += [os.path.abspath(os.path.join(android.ndk_home, 'toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/c++/v1'))]
+		conf.env.STLIBPATH += [os.path.abspath(os.path.join(android.ndk_home, 'toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/', stlarch, str(android.api)))]
+		#conf.env.LDFLAGS += ['-DANDROID_STL=c++_static', '-stdlib=libc++','-lc++_static', '-lc++abi']
 
 		conf.env.HAVE_M = True
 		if android.is_hardfp():
@@ -377,12 +379,12 @@ def post_compiler_cxx_configure(conf):
 	conf.msg('Target OS', conf.env.DEST_OS)
 	conf.msg('Target CPU', conf.env.DEST_CPU)
 	conf.msg('Target binfmt', conf.env.DEST_BINFMT)
-
-	if conf.options.ANDROID_OPTS:
-		if conf.android.ndk_rev == 19:
-			conf.env.CXXFLAGS_cxxshlib += ['-static-libstdc++']
-			conf.env.LDFLAGS_cxxshlib += ['-static-libstdc++']
-	return
+ # 
+	# if conf.options.ANDROID_OPTS:
+	# 	if conf.android.ndk_rev >= 19:
+	# 		conf.env.CXXFLAGS_cxxshlib += ['-lc++_static']
+	# 		conf.env.LDFLAGS_cxxshlib += ['-lc++_static']
+	# return
 
 def post_compiler_c_configure(conf):
 	conf.msg('Target OS', conf.env.DEST_OS)
