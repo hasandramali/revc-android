@@ -123,6 +123,7 @@ def configure(conf):
 			'-Wno-unused-but-set-variable',
 			'-Wno-unused-value',
 			'-Wno-unused-variable',
+			'-Wno-unused-command-line-argument',
 			'-faligned-new',
 		]
 
