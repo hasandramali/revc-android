@@ -640,6 +640,8 @@ public:
 	int32 m_nDisplayVideoMode;
 	int32 m_nMouseTempPosX;
 	int32 m_nMouseTempPosY;
+	int32 m_nTouchTempPosX;
+	int32 m_nTouchTempPosY;
 	bool m_bGameNotLoaded;
 	int8 m_lastWorking3DAudioProvider;
 	bool m_bFrontEnd_ReloadObrTxtGxt;
@@ -660,6 +662,7 @@ public:
 	int32 m_nOptionHighlightTransitionBlend;
 	bool bMenuChangeOngoing;
 	int32 MouseButtonJustClicked;
+	bool ScreenJustTouched;
 	int32 JoyButtonJustClicked;
 	bool DisplayComboButtonErrMsg;
 	bool m_NoEmptyBinding;
@@ -677,6 +680,10 @@ public:
 	int32 m_nMousePosY;
 	int32 m_nMouseOldPosX;
 	int32 m_nMouseOldPosY;
+	int32 m_nTouchPosX;
+	int32 m_nTouchPosY;
+	int32 m_nTouchOldPosX;
+	int32 m_nTouchOldPosY;
 	int32 m_nHoverOption;
 	bool m_bShowMouse;
 	int32 m_nOptionMouseHovering;

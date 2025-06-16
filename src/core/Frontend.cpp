@@ -1,4 +1,3 @@
-#include "SDL_joystick.h"
 #define FORCE_PC_SCALING
 #define WITHWINDOWS
 #define WITHDINPUT
@@ -36,6 +35,7 @@
 #include "FileLoader.h"
 #include "User.h"
 #include "sampman.h"
+#include <vector>
 
 // Similar story to Hud.cpp:
 // Game has colors inlined in code.
@@ -67,6 +67,8 @@ const CRGBA SCROLLBAR_COLOR = LABEL_COLOR;
 #define MAX_VISIBLE_OPTION 12
 #define MAX_VISIBLE_OPTION_ON_SCREEN (hasNativeList(m_nCurrScreen) ? MAX_VISIBLE_LIST_ROW : MAX_VISIBLE_OPTION)
 #define SCREEN_HAS_AUTO_SCROLLBAR (m_nTotalListRow > MAX_VISIBLE_OPTION && !hasNativeList(m_nCurrScreen))
+
+std::vector<CRect> rectsToDraw;
 
 int GetOptionCount(int screen)
 {
@@ -424,6 +426,9 @@ CMenuManager::GetPreviousPageOption()
 bool DoRWStuffStartOfFrame(int16 TopRed, int16 TopGreen, int16 TopBlue, int16 BottomRed, int16 BottomGreen, int16 BottomBlue, int16 Alpha);
 void DoRWStuffEndOfFrame(void);
 
+static psGlobalType PsGlobal;
+#define PSGLOBAL(var) (((psGlobalType *)(RsGlobal.ps))->var)
+
 void
 CMenuManager::SwitchToNewScreen(int8 screen)
 {
@@ -521,7 +526,11 @@ CMenuManager::CMenuManager()
 	m_nMousePosY = m_nMouseTempPosY;
 	m_nMouseOldPosX = m_nMousePosX;
 	m_nMouseOldPosY = m_nMousePosY;
-	m_bShowMouse = true;
+	m_nTouchPosX = m_nTouchTempPosX;
+	m_nTouchPosY = m_nTouchTempPosY;
+	m_nTouchOldPosX = m_nTouchPosX;
+	m_nTouchOldPosY = m_nTouchPosY;
+	m_bShowMouse = false;
 	m_nHoverOption = HOVEROPTION_NOT_HOVERING;
 
 	DMAudio.SetMP3BoostVolume(m_PrefsMP3BoostVolume);
@@ -579,7 +588,7 @@ CMenuManager::Initialise(void)
 #ifdef GTA_HANDHELD
 	m_bShowMouse = false;
 #else
-	m_bShowMouse = true;
+	m_bShowMouse = false;
 #endif
 	m_fMapSize = MENU_Y(162.0f); // Y because of HOR+
 	m_fMapCenterX = MENU_X_LEFT_ALIGNED(320.0f);
@@ -673,7 +682,10 @@ CMenuManager::CheckCodesForControls(int typeOfControl)
 		typeToSave = JOYSTICK;
 		if (ControlsManager.GetIsActionAButtonCombo(action))
 			DisplayComboButtonErrMsg = true;
+	} else if (typeOfControl == TOUCH){
+		typeToSave = TOUCH;
 	}
+	
 
 #ifdef FIX_BUGS
 	if(!escPressed && !invalidKey)
@@ -688,7 +700,9 @@ CMenuManager::CheckCodesForControls(int typeOfControl)
 			ControlsManager.DeleteMatchingActionInitiators(action, MouseButtonJustClicked, MOUSE);
 		} else if (typeOfControl == JOYSTICK) {
 			ControlsManager.DeleteMatchingActionInitiators(action, JoyButtonJustClicked, JOYSTICK);
-		}
+		} /*else if (typeOfControl == TOUCH){
+			ControlsManager.DeleteMatchingActionInitiators(action, ScreenJustTouched, TOUCH);
+		}*/
 
 		if (typeOfControl == KEYBOARD) {
 			ControlsManager.SetControllerKeyAssociatedWithAction(action, *pControlEdit, typeToSave);
@@ -696,7 +710,9 @@ CMenuManager::CheckCodesForControls(int typeOfControl)
 			ControlsManager.SetControllerKeyAssociatedWithAction(action, MouseButtonJustClicked, typeToSave);
 		} else if (typeOfControl == JOYSTICK) {
 			ControlsManager.SetControllerKeyAssociatedWithAction(action, JoyButtonJustClicked, typeToSave);
-		}
+		} /*else if (typeOfControl == TOUCH){
+			ControlsManager.SetControllerKeyAssociatedWithAction(action, ScreenJustTouched, TOUCH);
+		}*/ //Don't need this
 		pControlEdit = nil;
 		m_bWaitingForNewKeyBind = false;
 		m_KeyPressedCode = -1;
@@ -712,8 +728,11 @@ CMenuManager::CheckCodesForControls(int typeOfControl)
 bool
 CMenuManager::CheckHover(int x1, int x2, int y1, int y2)
 {
-	return m_nMousePosX > x1 && m_nMousePosX < x2 &&
-	       m_nMousePosY > y1 && m_nMousePosY < y2;
+	bool mouse = m_nMousePosX > x1 && m_nMousePosX < x2 &&
+				 m_nMousePosY > y1 && m_nMousePosY < y2;
+	bool touch = m_nTouchPosX > x1 && m_nTouchPosX < x2 &&
+				 m_nTouchPosY > y1 && m_nTouchPosY < y2;
+	return mouse || touch;
 }
 
 void
@@ -2296,6 +2315,14 @@ CMenuManager::DrawFrontEnd()
 		bMenuChangeOngoing = false;
 
 	DrawBackground(false);
+	if(!rectsToDraw.empty())
+	{
+		for(const CRect& r :rectsToDraw)
+		{
+			CSprite2d::DrawRect(r, CRGBA(0, 100, 10, 170));
+		}
+		rectsToDraw.clear();
+	}
 }
 
 void
@@ -4207,7 +4234,7 @@ CMenuManager::ProcessList(bool &optionSelected, bool &goBack)
 		goBack = true;
 	}
 
-	if (CPad::GetPad(0)->GetLeftMouseJustDown()) {
+	if (CPad::GetPad(0)->GetLeftMouseJustDown() || CPad::GetPad(0)->GetFingerJustDown()) {
 		switch (m_nHoverOption) {
 		case HOVEROPTION_BACK:
 			goBack = true;
@@ -4228,7 +4255,7 @@ CMenuManager::ProcessList(bool &optionSelected, bool &goBack)
 		}
 	}
 
-	if (CPad::GetPad(0)->GetLeftMouseJustDown()) {
+	if (CPad::GetPad(0)->GetLeftMouseJustDown() || CPad::GetPad(0)->GetFingerJustDown()) {
 		switch (m_nHoverOption) {
 		case HOVEROPTION_OVER_SCROLL_UP:
 			m_nHoverOption = HOVEROPTION_CLICKED_SCROLL_UP;
@@ -4244,7 +4271,7 @@ CMenuManager::ProcessList(bool &optionSelected, bool &goBack)
 		m_nHoverOption = HOVEROPTION_NOT_HOVERING;
 	}
 
-	if (!CPad::GetPad(0)->GetLeftMouse()) {
+	if (!CPad::GetPad(0)->GetLeftMouse() || !CPad::GetPad(0)->GetFingerJustDown()) {
 		holdingScrollBar = false;
 	} else {
 		if ((m_nHoverOption == HOVEROPTION_HOLDING_SCROLLBAR) || holdingScrollBar) {
@@ -4284,13 +4311,18 @@ CMenuManager::UserInput(void)
 	bool goUp = false;
 	bool goDown = false;
 	int8 changeValueBy;
-
+	
 	if (!m_AllowNavigation && m_firstStartCounter == 255)
 		m_AllowNavigation = true;
 	if (!m_bShowMouse && m_nCurrScreen != MENUPAGE_MAP && (m_nMouseOldPosX != m_nMousePosX || m_nMouseOldPosY != m_nMousePosY)) {
 		m_bShowMouse = true;
 	}
-
+	
+	struct SelectedRowCoords {
+		int x1, x2, y1, y2;
+		bool isValid = false;
+	} hoveredCoords;
+	
 	static int oldOption = -99;
 	oldOption = m_nCurrOption;
 #ifdef SCROLLABLE_PAGES
@@ -4304,15 +4336,44 @@ CMenuManager::UserInput(void)
 			aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_Action == MENUACTION_LABEL)
 			continue;
 
-		// unused: CFont::GetStringWidth(TheText.Get(aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_EntryName), true);
-		// So they also wanted the compare X, but they abandoned the idea later on
+		float textWidth = CFont::GetStringWidth(TheText.Get(aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_EntryName), true);
+		int menuY = aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_Y;
+		int menuX = aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_X;
 
-		if (m_nMousePosY > MENU_Y(aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_Y MINUS_SCROLL_OFFSET) &&
-			m_nMousePosY < MENU_Y(aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_Y MINUS_SCROLL_OFFSET PLUS_LINE_HEIGHT_ON_SCREEN)) {
+		int y1 = MENU_Y(menuY MINUS_SCROLL_OFFSET);
+		int y2 = MENU_Y(menuY MINUS_SCROLL_OFFSET PLUS_LINE_HEIGHT_ON_SCREEN); 
+
+		int x1, x2;
+		if (aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_Align == MENUALIGN_CENTER ) {
+			x1 = MENU_X_LEFT_ALIGNED(menuX - textWidth / 2.0f);
+			x2 = MENU_X_LEFT_ALIGNED(menuX + textWidth / 2.0f);
+		}
+		else if (aScreens[m_nCurrScreen].m_aEntries[rowToCheck].m_Align == MENUALIGN_RIGHT) {
+			x1 = MENU_X_LEFT_ALIGNED(menuX - textWidth);
+			x2 = MENU_X_LEFT_ALIGNED(menuX);
+		}
+		else {
+			x1 = MENU_X_LEFT_ALIGNED(menuX);
+			x2 = MENU_X_LEFT_ALIGNED(menuX + textWidth);
+		}
+		
+		//1sh0zer: now we are checking X too
+		if (CheckHover(x1, x2, y1, y2)){
 			static int oldScreen = m_nCurrScreen;
+			hoveredCoords.x1 = x1;
+			hoveredCoords.x2 = x2;
+			hoveredCoords.y1 = y1;
+			hoveredCoords.y2 = y2;
+			hoveredCoords.isValid = true;
 
 			m_nOptionMouseHovering = rowToCheck;
+
 			if (m_nMouseOldPosX != m_nMousePosX || m_nMouseOldPosY != m_nMousePosY) {
+				m_nCurrOption = rowToCheck;
+				m_bShowMouse = true;
+			}
+			
+			if (m_nTouchOldPosX != m_nTouchPosX || m_nTouchOldPosY != m_nTouchPosY) {
 				m_nCurrOption = rowToCheck;
 				m_bShowMouse = true;
 			}
@@ -4349,7 +4410,13 @@ CMenuManager::UserInput(void)
 	m_nMouseOldPosY = m_nMousePosY;
 	m_nMousePosX = m_nMouseTempPosX;
 	m_nMousePosY = m_nMouseTempPosY;
+	
+	m_nTouchOldPosX = m_nTouchPosX;
+	m_nTouchOldPosY = m_nTouchPosY;
+	m_nTouchPosX = m_nTouchTempPosX;
+	m_nTouchPosY = m_nTouchTempPosY;
 
+	
 	if (m_nMousePosX < 0) m_nMousePosX = 0;
 	if (m_nMousePosX > SCREEN_WIDTH) m_nMousePosX = SCREEN_WIDTH;
 	if (m_nMousePosY < 0) m_nMousePosY = 0;
@@ -4385,17 +4452,17 @@ CMenuManager::UserInput(void)
 				optionSelected = true;
 			}
 		}
-
-		if (CPad::GetPad(0)->GetLeftMouseJustUp() && m_nCurrScreen != MENUPAGE_MAP) {
-			if (m_nHoverOption == HOVEROPTION_RANDOM_ITEM)
-				optionSelected = true;
-			else if (m_nHoverOption == HOVEROPTION_NEXT_RADIO)
-				ChangeRadioStation(1);
-			else if (m_nHoverOption == HOVEROPTION_PREV_RADIO)
-				ChangeRadioStation(-1);
+		if (hoveredCoords.isValid && CheckHover(hoveredCoords.x1, hoveredCoords.x2, hoveredCoords.y1, hoveredCoords.y2)){ //1sh0zer: still checking
+			if ((CPad::GetPad(0)->GetLeftMouseJustUp() || CPad::GetPad(0)->GetFingerJustDown()) && m_nCurrScreen != MENUPAGE_MAP) {
+				if (m_nHoverOption == HOVEROPTION_RANDOM_ITEM)
+					optionSelected = true;
+				else if (m_nHoverOption == HOVEROPTION_NEXT_RADIO)
+					ChangeRadioStation(1);
+				else if (m_nHoverOption == HOVEROPTION_PREV_RADIO)
+					ChangeRadioStation(-1);
+			}
 		}
-
-		if (CPad::GetPad(0)->GetLeftMouse()) {
+		if (CPad::GetPad(0)->GetLeftMouse() || CPad::GetPad(0)->GetFinger()) {
 			switch (m_nHoverOption) {
 			case HOVEROPTION_INCREASE_BRIGHTNESS:
 			case HOVEROPTION_INCREASE_MP3BOOST:
@@ -4446,7 +4513,7 @@ CMenuManager::UserInput(void)
 		if (CPad::GetPad(0)->GetLeftMouseJustUp() || CPad::GetPad(0)->GetLeftJustUp() || CPad::GetPad(0)->GetRightJustUp()
 			|| CPad::GetPad(0)->GetDPadLeftJustUp() || CPad::GetPad(0)->GetDPadRightJustUp()
 			|| CPad::GetPad(0)->GetAnaloguePadLeftJustUp() || CPad::GetPad(0)->GetAnaloguePadRightJustUp()
-			|| CPad::GetPad(0)->GetMouseWheelUpJustDown() || CPad::GetPad(0)->GetMouseWheelDownJustDown()) {
+			|| CPad::GetPad(0)->GetMouseWheelUpJustDown() || CPad::GetPad(0)->GetMouseWheelDownJustDown() || CPad::GetPad(0)->GetFingerJustUp()) {
 			int option = aScreens[m_nCurrScreen].m_aEntries[m_nCurrOption].m_Action;
 			if (option == MENUACTION_BRIGHTNESS
 #ifdef CUSTOM_FRONTEND_OPTIONS
@@ -4590,6 +4657,14 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 			pControlEdit = CPad::EditCodesForControls(pControlEdit, 1);
 			JoyButtonJustClicked = false;
 			MouseButtonJustClicked = false;
+			ScreenJustTouched = false;
+			
+			// SDL_AndroidShowToast("Updating\n", 0, -1, 0,0);
+			// if(CPad::GetPad(0)->GetFingerJustDown())
+			// {
+			// 	ScreenJustTouched = true;
+			// 	SDL_AndroidShowToast("just touched\n", 0, -1, 0,0);
+			// }
 
 			if (CPad::GetPad(0)->GetLeftMouseJustDown()){
 				MouseButtonJustClicked = rsMOUSELEFTBUTTON;}
@@ -4612,6 +4687,8 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 				TypeOfControl = JOYSTICK;
 			if (MouseButtonJustClicked)
 				TypeOfControl = MOUSE;
+			if (ScreenJustTouched)
+				TypeOfControl = TOUCH;
 			if (*pControlEdit != rsNULL)
 				TypeOfControl = KEYBOARD;
 

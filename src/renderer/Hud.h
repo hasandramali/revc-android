@@ -1,5 +1,6 @@
 #pragma once
 #include "Sprite2d.h"
+#include "Touch.h"
 
 #define HELP_MSG_LENGTH 256
 

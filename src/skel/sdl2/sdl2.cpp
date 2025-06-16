@@ -89,6 +89,8 @@ bool mouse2 = false;
 
 float mousePosX = 0.f;
 float mousePosY = 0.f;
+
+TouchInfo touchInfo[10] = {0};
 /*
  *****************************************************************************
  */
@@ -333,6 +335,7 @@ RwBool
 psInitialize(void)
 {
  	PsGlobal.lastMousePos.x = PsGlobal.lastMousePos.y = 0.0f;
+	PsGlobal.lastTouchPos.x = PsGlobal.lastTouchPos.y = 0.0f;
  
  	RsGlobal.ps = &PsGlobal;
  	
@@ -399,7 +402,7 @@ psInitialize(void)
 
 	TheMemoryCard.Init();
 #else
-	//C_PcSave::SetSaveDirectory(_psGetUserFilesFolder());
+	//C_PcSave::SetSaveDirectory(_psGetUserFilesFolder());//FIXME
 	
 	InitialiseLanguage();
 
@@ -713,14 +716,21 @@ psSelectDevice()
 #else
 	if ( !useDefault )
 	{
-		if(FrontEndMenuManager.m_nPrefsWidth == 0 ||
+		bool noPrefs = FrontEndMenuManager.m_nPrefsWidth == 0 ||
 		   FrontEndMenuManager.m_nPrefsHeight == 0 ||
-		   FrontEndMenuManager.m_nPrefsDepth == 0){
-			// Defaults if nothing specified
+		   FrontEndMenuManager.m_nPrefsDepth == 0;
+		   
+		bool fitsPrefs = vm.width <= FrontEndMenuManager.m_nPrefsWidth || 
+		vm.height <= FrontEndMenuManager.m_nPrefsHeight ||
+		vm.depth <= FrontEndMenuManager.m_nPrefsDepth;
+		
+		if(noPrefs || !fitsPrefs) { //help me
+			// Defaults if nothing specified or we are bigger
 			SDL_DisplayMode mode;
 			SDL_GetDesktopDisplayMode(0, &mode);
 			FrontEndMenuManager.m_nPrefsWidth = mode.w;
 			FrontEndMenuManager.m_nPrefsHeight = mode.h;
+			debug("Resolution set to default w:%d h:%d\n", mode.w, mode.h);
 			FrontEndMenuManager.m_nPrefsDepth = 32;
 			FrontEndMenuManager.m_nPrefsWindowed = 0;
 		}
@@ -732,18 +742,25 @@ psSelectDevice()
 		RwInt32 bestDepth = -1;
 		for(GcurSelVM = 0; GcurSelVM < RwEngineGetNumVideoModes(); GcurSelVM++){
 			RwEngineGetVideoModeInfo(&vm, GcurSelVM);
-
 			if (!(vm.flags & rwVIDEOMODEEXCLUSIVE)){
 				bestWndMode = GcurSelVM;
 			} else {
 				// try the largest one that isn't larger than what we wanted
-				if(vm.width >= bestWidth && vm.width <= FrontEndMenuManager.m_nPrefsWidth &&
-				   vm.height >= bestHeight && vm.height <= FrontEndMenuManager.m_nPrefsHeight &&
-				   vm.depth >= bestDepth && vm.depth <= FrontEndMenuManager.m_nPrefsDepth){
-					bestWidth = vm.width;
-					bestHeight = vm.height;
-					bestDepth = vm.depth;
-					bestFsMode = GcurSelVM;
+				if(vm.width >= bestWidth &&
+				   vm.height >= bestHeight &&
+				   vm.depth >= bestDepth)
+				{
+					// if(vm.width <= FrontEndMenuManager.m_nPrefsWidth && vm.height <= FrontEndMenuManager.m_nPrefsHeight && vm.depth <= FrontEndMenuManager.m_nPrefsDepth)
+					// {
+						bestWidth = vm.width;
+						bestHeight = vm.height;
+						bestDepth = vm.depth;
+						bestFsMode = GcurSelVM;
+						debug("Found resolution is w:%d h:%d\n", bestWidth, bestHeight);
+					// }
+					// else{
+					// 	debug("Prefs resolution is smaller, than we have!\n");
+					// }
 				}
 			}
 		}
@@ -1095,14 +1112,27 @@ void SDL_Events(SDL_Event *event)
 			}
 			break;
 		case SDL_FINGERDOWN:
-			mouse1 = true;
+			if (FrontEndMenuManager.m_bMenuActive)
+			{
+				FrontEndMenuManager.m_nTouchTempPosX = event->tfinger.x * (float)RsGlobal.maximumWidth;
+				FrontEndMenuManager.m_nTouchTempPosY = event->tfinger.y * (float)RsGlobal.maximumHeight;
+			}
+			touchInfo[event->tfinger.fingerId].pressed = true;
+			touchInfo[event->tfinger.fingerId].x = event->tfinger.x * (float)RsGlobal.maximumWidth;
+			touchInfo[event->tfinger.fingerId].y = event->tfinger.y * (float)RsGlobal.maximumHeight;
 			break;
 		case SDL_FINGERUP:
-				mouse1 = false;
-				break;
-		default:
-				mouse1 = false;
-				mouse2 = false;				
+			touchInfo[event->tfinger.fingerId].pressed = false;
+			touchInfo[event->tfinger.fingerId].x = 0.0f;
+			touchInfo[event->tfinger.fingerId].y = 0.0f;
+			touchInfo[event->tfinger.fingerId].dx = 0.0f;
+			touchInfo[event->tfinger.fingerId].dy = 0.0f;
+			break;
+		case SDL_FINGERMOTION:
+			touchInfo[event->tfinger.fingerId].x  += event->tfinger.dx * (float)RsGlobal.maximumWidth;
+			touchInfo[event->tfinger.fingerId].y  += event->tfinger.dy * (float)RsGlobal.maximumHeight;
+			touchInfo[event->tfinger.fingerId].dx  = event->tfinger.dx * (float)RsGlobal.maximumWidth;
+			touchInfo[event->tfinger.fingerId].dy  = event->tfinger.dy * (float)RsGlobal.maximumHeight;
 	}
 }
 

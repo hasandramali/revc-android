@@ -92,6 +92,7 @@ def build(bld):
         'renderer/Clouds.cpp',
         'renderer/Shadows.cpp',
         'renderer/Hud.cpp',
+	'renderer/Touch.cpp',
         'renderer/Draw.cpp',
         'renderer/Rubbish.cpp',
         'renderer/Particle.cpp',

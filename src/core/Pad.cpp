@@ -43,6 +43,7 @@
 #include "Stats.h"
 #include "CarCtrl.h"
 #include "TrafficLights.h"
+#include "Touch.h"
 
 #ifdef GTA_PS2
 #include "eetypes.h"
@@ -78,6 +79,12 @@ char CPad::KeyBoardCheatString[30];
 CMouseControllerState CPad::OldMouseControllerState;
 CMouseControllerState CPad::NewMouseControllerState;
 CMouseControllerState CPad::PCTempMouseControllerState;
+
+CTouchControllerState CPad::OldTouchControllerState;
+CTouchControllerState CPad::NewTouchControllerState;
+CTouchControllerState CPad::TempTouchControllerState;
+
+CTouch gTouch;
 
 #ifdef DETECT_PAD_INPUT_SWITCH
 bool CPad::IsAffectedByController = false;
@@ -753,6 +760,9 @@ void CPad::Clear(bool bResetPlayerControls)
 	NewMouseControllerState.Clear();
 	OldMouseControllerState.Clear();
 	PCTempMouseControllerState.Clear();
+	
+	NewTouchControllerState.Clear();
+	OldTouchControllerState.Clear();
 
 	Phase = 0;
 	ShakeFreq = 0;
@@ -825,6 +835,19 @@ void CMouseControllerState::Clear()
 	WHEELDN = 0;
 	MXB1 = 0;
 	MXB2 = 0;
+}
+
+CTouchControllerState::CTouchControllerState()
+{
+	TCH = 0;
+
+	x = 0.0f;
+	y = 0.0f;
+}
+
+void CTouchControllerState::Clear()
+{
+	TCH = 0;
 }
 
 CMouseControllerState CMousePointerStateHelper::GetMouseSetUp()
@@ -968,12 +991,12 @@ void CPad::UpdateMouse()
 	if ( IsForegroundApp() )
 	{
 		int32 signX = 1;
-		int32 signy = 1;
+		int32 signY = 1;
 
 		if (!FrontEndMenuManager.m_bMenuActive)
 		{
 			if (MousePointerStateHelper.bInvertVertically)
-				signy = -1;
+				signY = -1;
 			if (MousePointerStateHelper.bInvertHorizontally)
 				signX = -1;
 		}
@@ -981,7 +1004,7 @@ void CPad::UpdateMouse()
 		PCTempMouseControllerState.Clear();
 
 		PCTempMouseControllerState.x = (float)(signX * (mousePosX - PSGLOBAL(lastMousePos.x)));
-		PCTempMouseControllerState.y = (float)(signy * (mousePosY - PSGLOBAL(lastMousePos.y)));
+		PCTempMouseControllerState.y = (float)(signY * (mousePosY - PSGLOBAL(lastMousePos.y)));
 		PCTempMouseControllerState.LMB = mouse1;
 		PCTempMouseControllerState.RMB = mouse2;
 		/*PCTempMouseControllerState.MMB = glfwGetMouseButton(PSGLOBAL(window), GLFW_MOUSE_BUTTON_MIDDLE);
@@ -1001,6 +1024,29 @@ void CPad::UpdateMouse()
 		NewMouseControllerState = PCTempMouseControllerState;
 	}
 #endif
+}
+
+void CPad::UpdateTouch() // 1sh0zer: I know it's better to use some preprocessor directives for this, but I'm lazy ass.
+{
+	int32 signX = 1;
+	int32 signY = 1;
+	TempTouchControllerState.Clear();
+	
+	for(int i = 0; i < 10; i++)
+	{
+		const TouchInfo &touch = touchInfo[i];
+		if(!touch.pressed)
+			continue;
+		TempTouchControllerState.x = (float)(signX * (touch.x - PSGLOBAL(lastTouchPos.x)));
+		TempTouchControllerState.y = (float)(signY * (touch.y - PSGLOBAL(lastTouchPos.y)));
+		TempTouchControllerState.TCH = touch.pressed;
+		
+		PSGLOBAL(lastTouchPos.x) = touch.x;
+		PSGLOBAL(lastTouchPos.y) = touch.y;
+	}
+	
+	OldTouchControllerState = NewTouchControllerState;
+	NewTouchControllerState = TempTouchControllerState;
 }
 
 CControllerState CPad::ReconcileTwoControllersInput(CControllerState const &State1, CControllerState const &State2)
@@ -1695,6 +1741,7 @@ void CPad::UpdatePads(void)
 	bool bUpdate = true;
 
 	GetPad(0)->UpdateMouse();
+	GetPad(0)->UpdateTouch();
 #ifdef XINPUT
 	GetPad(0)->AffectFromXinput(m_bMapPadOneToPadTwo ? 1 : 0);
 	GetPad(1)->AffectFromXinput(m_bMapPadOneToPadTwo ? 0 : 1);
@@ -2129,6 +2176,9 @@ int16 CPad::GetSteeringLeftRight(void)
 	if ( ArePlayerControlsDisabled() )
 		return 0;
 
+	if(gTouch.moveAxisX != 0)
+		return gTouch.moveAxisX;
+	
 	int16 value;
 	switch (CURMODE)
 	{
@@ -2171,6 +2221,9 @@ int16 CPad::GetSteeringUpDown(void)
 	if ( ArePlayerControlsDisabled() )
 		return 0;
 
+	if(gTouch.moveAxisY != 0)
+		return gTouch.moveAxisY;
+	
 	switch (CURMODE)
 	{
 		case 0:
@@ -2201,6 +2254,10 @@ int16 CPad::GetSteeringUpDown(void)
 
 int16 CPad::GetCarGunUpDown(void)
 {
+	
+	if(gTouch.lookAxisY != 0)
+		return gTouch.lookAxisY;
+	
 	if ( ArePlayerControlsDisabled() )
 		return 0;
 
@@ -2228,9 +2285,14 @@ int16 CPad::GetCarGunUpDown(void)
 
 int16 CPad::GetCarGunLeftRight(void)
 {
+	if(gTouch.lookAxisX != 0)
+		return gTouch.lookAxisX;
+	
 	if ( ArePlayerControlsDisabled() )
 		return 0;
 
+	
+	
 	switch (CURMODE)
 	{
 		case 0:
@@ -2257,7 +2319,10 @@ int16 CPad::GetPedWalkLeftRight(void)
 {
 	if ( ArePlayerControlsDisabled() )
 		return 0;
-
+	
+	if(gTouch.moveAxisX != 0)
+		return gTouch.moveAxisX;
+	
 	switch (CURMODE)
 	{
 		case 0:
@@ -2291,6 +2356,9 @@ int16 CPad::GetPedWalkUpDown(void)
 	if ( ArePlayerControlsDisabled() )
 		return 0;
 
+	if(gTouch.moveAxisY != 0)
+		return gTouch.moveAxisY;
+	
 	switch (CURMODE)
 	{
 		case 0:
@@ -2321,6 +2389,8 @@ int16 CPad::GetPedWalkUpDown(void)
 
 int16 CPad::GetAnalogueUpDown(void)
 {
+	if(gTouch.lookAxisY != 0)
+		return gTouch.lookAxisY;
 	switch (CURMODE)
 	{
 		case 0:
@@ -2351,6 +2421,8 @@ int16 CPad::GetAnalogueUpDown(void)
 
 int16 CPad::GetAnalogueLeftRight(void)
 {
+	if(gTouch.lookAxisX != 0)
+		return gTouch.lookAxisX;
 	switch (CURMODE)
 	{
 		case 0:
@@ -3029,6 +3101,9 @@ bool CPad::JumpJustDown(void)
 	if ( ArePlayerControlsDisabled() )
 		return false;
 
+	if(gTouch.getButtonJustDown(BtnType::JUMP))
+		return true;
+	
 	return !!(NewState.Square && !OldState.Square);
 }
 
@@ -3037,6 +3112,8 @@ bool CPad::GetSprint(void)
 	if ( ArePlayerControlsDisabled() )
 		return false;
 
+	if(gTouch.getButtonJustDown(BtnType::RUN))
+		return true;
 	switch (CURMODE)
 	{
 		case 0:

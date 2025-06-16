@@ -1,5 +1,4 @@
 #include "common.h"
-
 #include "Camera.h"
 #include "DMAudio.h"
 #include "Clock.h"
@@ -1429,6 +1428,7 @@ void CHud::Draw()
 			BigMessageInUse[2] = 0.0f;
 		}
 	}
+	gTouch.Draw();
 }
 
 void CHud::DrawAfterFade()
@@ -1838,6 +1838,8 @@ void CHud::ReInitialise() {
 	m_LastTimeEnergyLost = CWorld::Players[CWorld::PlayerInFocus].m_nTimeLastHealthLoss;
 	m_LastWanted = 0;
 	m_LastWeapon = 0;
+	
+	gTouch.Init();
 }
 
 wchar LastBigMessage[6][128];

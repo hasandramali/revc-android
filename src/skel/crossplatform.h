@@ -88,6 +88,7 @@ typedef struct
     SDL_Window* window;
     RwBool		fullScreen;
     RwV2d		lastMousePos;
+    RwV2d		lastTouchPos;
     int      mouseWheel; // glfw doesn't cache it
     bool        cursorIsInWindow;
     SDL_Joystick*        joy1;
