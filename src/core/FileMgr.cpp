@@ -49,7 +49,7 @@ void mychdir(char const *path)
         chdir(pathRoot);
 		char cwd[1028];
 		getcwd(cwd, sizeof(cwd));
-		debug("Changing dir to %s . Now it is %s \n", pathRoot, cwd);
+		// debug("Changing dir to %s . Now it is %s \n", pathRoot, cwd);
 		free(r);
     } else {
         errno = ENOENT;
@@ -63,7 +63,7 @@ void mychdir(char const *path)
 static int
 myfopen(const char *filename, const char *mode)
 {
-	debug("Opening file %s, with mode %s\n", filename, mode);
+	// debug("Opening file %s, with mode %s\n", filename, mode);
 	int fd;
 	char realmode[10], *p;
 
