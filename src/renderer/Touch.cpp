@@ -7,7 +7,7 @@
 #include "Sprite2d.h"
 #include "Touch.h"
 #include <cmath>
-#include "android/log.h"
+// #include "android/log.h"
 
 Btn::Btn(float x1, float y1, float x2, float y2, BtnType type = BtnType::DEFAULT, CRGBA color = CRGBA(255, 255, 255, 255), bool preserveAspect = true)
     :x1(x1), y1(y1), x2(x2), y2(y2), type(type), color(color), preserveAspect(preserveAspect)
@@ -21,10 +21,8 @@ void CTouch::Init()
     touchButtons.emplace_back(0.5f, 0.0f, 1.0f, 1.0f, BtnType::LOOK, CRGBA(255, 0, 0, 255), false);
     touchButtons.emplace_back(0.15f, 0.60f, 0.3f, 0.70f, BtnType::JOY,   CRGBA(255, 255, 255, 255));
     touchButtons.emplace_back(0.0f, 0.0f, 0.05f, 0.05f, BtnType::STICK, CRGBA(0,   0,   255, 255));
-    touchButtons.emplace_back(0.70f, 0.60f, 0.80f, 0.70f, BtnType::RUN,   CRGBA(255, 255, 255, 255));
-    touchButtons.emplace_back(0.85f, 0.75f, 0.95f, 0.85f, BtnType::JUMP,  CRGBA(255, 255, 255, 255));
-
-
+    touchButtons.emplace_back(0.70f, 0.60f, 0.75f, 0.65f, BtnType::JUMP,   CRGBA(255, 255, 255, 255));
+    touchButtons.emplace_back(0.85f, 0.75f, 0.90f, 0.80f, BtnType::CAR,  CRGBA(255, 255, 255, 255));
     
     for (Btn& btn : touchButtons) {
         if (btn.type == BtnType::STICK) stickBtn = &btn;
@@ -51,7 +49,7 @@ void CTouch::Draw()
                 else
                     btn.color = CRGBA(255, 255, 255, 255);
             }
-            // if(btn.type != BtnType::LOOK)
+            if(btn.type != BtnType::LOOK)
                 CSprite2d::DrawRect(btn.rect, btn.color);
         }
         UpdateStick();
@@ -61,24 +59,25 @@ void CTouch::Draw()
 
 void CTouch::UpdateLook()
 {
-    if(look_finger == -1)
-    {
-        lookAxisX = lookAxisY = 0;
-        return;
-    }
-    
-    if(!touchInfo[look_finger].pressed)
+    float smoothing = 0.2f;
+    if(look_finger == -1 || !touchInfo[look_finger].pressed)
     {
         look_finger = -1;
-        return;
+        lookAxisX = lookAxisY = 0;
+        smoothedLookX += (0.0f - smoothedLookX) * smoothing;
+        smoothedLookY += (0.0f - smoothedLookY) * smoothing;
     }
     
-    float lookX = touchInfo[look_finger].dx / SCREEN_WIDTH;
-    float lookY = touchInfo[look_finger].dy / SCREEN_HEIGHT;
     
-    lookAxisX = lookX * 128;
-    lookAxisY = lookY * 128;
-    __android_log_print(ANDROID_LOG_DEBUG, "touch-debug", "lookAxisX %d lookAxisY %d", lookAxisX , lookAxisY);
+    float lookX = touchInfo[look_finger].dx * 15;  //this magic numbers here cause i'm a wizard
+    float lookY = touchInfo[look_finger].dy * 15;
+
+    
+    smoothedLookX = smoothedLookX * (1.0f - smoothing) + lookX * smoothing;
+    smoothedLookY = smoothedLookY * (1.0f - smoothing) + lookY * smoothing;
+    
+    lookAxisX = smoothedLookX;
+    lookAxisY = -smoothedLookY;
 }
 
 void CTouch::UpdateStick()
@@ -148,9 +147,6 @@ void CTouch::UpdateStick()
 // float top;      // y min
 void CTouch::checkFinger(Btn& btn)
 {
-    if (btn.type == BtnType::JOY)
-        return;
-    
     btn.touched = false;
     for(int i = 0; i < 10; i++)
     {
@@ -161,7 +157,7 @@ void CTouch::checkFinger(Btn& btn)
         if(touch.x >= btn.rect.left && touch.x <= btn.rect.right &&
            touch.y >= btn.rect.top && touch.y <= btn.rect.bottom)
         {
-            if(btn.type == BtnType::STICK)
+            if(btn.type == BtnType::STICK || btn.type == BtnType::JOY)
             {
                 move_finger = i;
                 break;

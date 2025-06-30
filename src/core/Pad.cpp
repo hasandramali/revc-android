@@ -2220,9 +2220,6 @@ int16 CPad::GetSteeringUpDown(void)
 {
 	if ( ArePlayerControlsDisabled() )
 		return 0;
-
-	if(gTouch.moveAxisY != 0)
-		return gTouch.moveAxisY;
 	
 	switch (CURMODE)
 	{
@@ -2389,8 +2386,8 @@ int16 CPad::GetPedWalkUpDown(void)
 
 int16 CPad::GetAnalogueUpDown(void)
 {
-	if(gTouch.lookAxisY != 0)
-		return gTouch.lookAxisY;
+	// if(gTouch.lookAxisY != 0)
+	// 	return gTouch.lookAxisY;
 	switch (CURMODE)
 	{
 		case 0:
@@ -2421,8 +2418,8 @@ int16 CPad::GetAnalogueUpDown(void)
 
 int16 CPad::GetAnalogueLeftRight(void)
 {
-	if(gTouch.lookAxisX != 0)
-		return gTouch.lookAxisX;
+	// if(gTouch.lookAxisX != 0)
+	// 	return gTouch.lookAxisX;
 	switch (CURMODE)
 	{
 		case 0:
@@ -2651,6 +2648,12 @@ int16 CPad::GetHandBrake(void)
 
 int16 CPad::GetBrake(void)
 {
+	int16 axis = 2 * gTouch.moveAxisY;
+	if ( axis < 0 )
+		return 0;
+	else
+		return axis;
+	
 	if ( ArePlayerControlsDisabled() )
 		return 0;
 
@@ -2689,6 +2692,9 @@ int16 CPad::GetBrake(void)
 
 bool CPad::GetExitVehicle(void)
 {
+	
+	if (gTouch.getButton(BtnType::CAR))
+		return true;
 	if ( ArePlayerControlsDisabled() )
 		return false;
 
@@ -2726,6 +2732,9 @@ bool CPad::ExitVehicleJustDown(void)
 	if ( JustOutOfFrontend != 0 )
 		return false;
 
+	if (gTouch.getButtonJustDown(BtnType::CAR))
+		return true;
+	
 	switch (CURMODE)
 	{
 		case 0:
@@ -2816,6 +2825,13 @@ bool CPad::WeaponJustDown(void)
 
 int16 CPad::GetAccelerate(void)
 {
+	int16 axis = -2 * gTouch.moveAxisY;
+	if ( axis < 0 )
+		return 0;
+	else
+		return axis;
+
+	
 	if ( ArePlayerControlsDisabled() )
 		return 0;
 
@@ -3111,9 +3127,6 @@ bool CPad::GetSprint(void)
 {
 	if ( ArePlayerControlsDisabled() )
 		return false;
-
-	if(gTouch.getButtonJustDown(BtnType::RUN))
-		return true;
 	switch (CURMODE)
 	{
 		case 0:
@@ -3396,7 +3409,9 @@ int16 CPad::SniperModeLookUpDown(void)
 int16 CPad::LookAroundLeftRight(void)
 {
 	float axis = GetPad(0)->NewState.RightStickX;
-
+	if ((axis == 0) && (gTouch.lookAxisX != 0))
+		axis = gTouch.lookAxisX;
+	
 	if ( Abs(axis) > 85 && !GetLookBehindForPed() )
 		return (int16) ( (axis + ( ( axis > 0 ) ? -85 : 85) )
 							* (127.0f / 32.0f) ); // 3.96875f
@@ -3411,6 +3426,8 @@ int16 CPad::LookAroundLeftRight(void)
 int16 CPad::LookAroundUpDown(void)
 {
 	int16 axis = GetPad(0)->NewState.RightStickY;
+	if ((axis == 0) && (gTouch.lookAxisY != 0))
+		axis = gTouch.lookAxisY;
 #ifdef FIX_BUGS
 	axis = -axis;
 #endif

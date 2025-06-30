@@ -1428,7 +1428,8 @@ void CHud::Draw()
 			BigMessageInUse[2] = 0.0f;
 		}
 	}
-	gTouch.Draw();
+	if(!CCutsceneMgr::IsRunning())
+		gTouch.Draw();
 }
 
 void CHud::DrawAfterFade()
@@ -1783,6 +1784,7 @@ void CHud::Initialise()
 	VarConsole.Add("Draw HUD", &m_Wants_To_Draw_Hud, false);
 #endif
 	CTxdStore::PopCurrentTxd();
+	gTouch.Init();
 }
 
 void CHud::ReInitialise() {

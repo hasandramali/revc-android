@@ -3,6 +3,8 @@
 #include "common.h"
 #include "config.h"
 #include "Touch.h"
+
+extern CTouch gTouch;
 enum {
 	PLAYERCONTROL_ENABLED = 0,
 	PLAYERCONTROL_CAMERA = 1,
@@ -529,6 +531,4 @@ struct TouchInfo{
 };
 
 extern TouchInfo touchInfo[10];
-
-extern CTouch gTouch;
 #endif

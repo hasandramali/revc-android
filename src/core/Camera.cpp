@@ -69,7 +69,7 @@ enum
 // NB: removed explicit TheCamera from all functions
 
 CCamera TheCamera;
-#ifdef PC_PLAYER_CONTROLS
+#if defined(PC_PLAYER_CONTROLS) || defined (ANDROID) //HACK we need a special function for touch, right?
 bool CCamera::m_bUseMouse3rdPerson = true;
 #else
 bool CCamera::m_bUseMouse3rdPerson = false;

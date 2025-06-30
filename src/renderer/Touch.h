@@ -6,7 +6,7 @@ enum BtnType{
     DEFAULT,
     STICK,
     JOY,
-    RUN,
+    CAR,
     JUMP,
     LOOK
 };
@@ -82,12 +82,24 @@ public:
         return false;
     }
     
+    bool getButton(BtnType type){
+        for(const Btn& btn : touchButtons)
+        {
+            if(btn.type == type && btn.touched && !btn.wasTouchedLastFrame)
+                return true;
+        }
+        return false;
+    }
+    
     int16 moveAxisX, moveAxisY;
     int16 lookAxisX, lookAxisY; //Oh god..
+    float smoothedLookX = 0.0f;
+    float smoothedLookY = 0.0f;
+
 private:
     std::vector<Btn> touchButtons;
     Btn* stickBtn = nullptr;
     Btn* joyBtn = nullptr;
     
-    int move_finger, look_finger; //five fingers in my ass...
+    int move_finger, look_finger; //five fingers in my ass
 };
