@@ -10,7 +10,6 @@
 	path = vendor/opusfile
 	url = https://github.com/xiph/opusfile.git
 	branch = master
-
 [submodule "vendor/librw"]
 	path = vendor/librw
 	url = https://github.com/klaymen1n/librw
@@ -19,5 +18,9 @@
 	path = vendor/openal-soft
 	url = https://github.com/kcat/openal-soft/
 [submodule "vendor/libmpg123"]
-	path = vendor/libmpg123
-	url = https://github.com/gypified/libmpg123
+	path = vendor/mpg123
+	url = https://github.com/libsdl-org/mpg123
+	branch = v1.31.3-SDL
+[submodule "lib"]
+	path = lib
+	url = https://github.com/klaymen1n/revc-android-3rdparty-libs
