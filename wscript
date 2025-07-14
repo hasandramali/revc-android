@@ -143,7 +143,7 @@ def configure(conf):
 		flags += [
 			'-I'+os.path.abspath('.')+'/vendor/SDL',
 			'-I'+os.path.abspath('.')+'/vendor/openal-soft/include/',
-			'-I'+os.path.abspath('.')+'/vendor/mpg123/include/',
+			'-I'+os.path.abspath('.')+'/vendor/mpg123/include',
 			'-llog'
 		]
 	
