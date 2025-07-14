@@ -44,7 +44,6 @@ class Android:
 		self.api = api
 		self.toolchain = toolchain
 		self.arch = arch
-
 		for i in ANDROID_NDK_ENVVARS:
 			self.ndk_home = os.getenv(i)
 			if self.ndk_home != None:
@@ -307,7 +306,7 @@ class Android:
 			ldflags += ['-lgcc']
 
 		if self.is_clang() or self.is_host():
-			ldflags += ['-stdlib=libc++', '-DANDROID_STL=c++_static','-lc++_static','-lc++abi', '-static-libstdc++']
+			ldflags += ['-lc++_shared']
 		if self.is_arm():
 			if self.arch == 'armeabi-v7a':
 				ldflags += ['-march=armv7-a']
