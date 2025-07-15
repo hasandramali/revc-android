@@ -357,8 +357,17 @@ __inline__ void TRACE(char *f, ...) { } // this is re3 only, and so the function
 #else
 #include <android/log.h>
 #include "android/android.h"
-// #define debug(...) __android_log_print(ANDROID_LOG_DEBUG, "REVC-DEBUG", __VA_ARGS__)
-#define debug(...) fprintf(logfile, __VA_ARGS__)
+#define debug(...)                                       \
+    do {                                                 \
+        __android_log_print(ANDROID_LOG_DEBUG,           \
+                            "REVC-DEBUG", __VA_ARGS__);  \
+        if (logfile) {                                   \
+            fprintf(logfile, __VA_ARGS__);               \
+            fprintf(logfile, "\n");                      \
+            fflush(logfile);                             \
+        }                                                \
+    } while (0)
+
 #endif
 #define Error(f, ...) re3_debug("[ERROR]: " f, ## __VA_ARGS__)
 #ifndef MASTER

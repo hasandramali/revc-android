@@ -1079,6 +1079,8 @@ DisplayGameDebugText()
 	sprintf(verA,
 #if defined _WIN32
 			"Win "
+#elif defined ANDROID
+			"Android"
 #elif defined __linux__
 		    "Linux "
 #elif defined __APPLE__
