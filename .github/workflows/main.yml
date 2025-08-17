@@ -47,7 +47,7 @@ jobs:
         ./waf build
 
     - name: Find and Upload APK as an artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: revc-android-build
         path: |
