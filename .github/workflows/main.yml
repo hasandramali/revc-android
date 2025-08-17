@@ -24,7 +24,7 @@ jobs:
       with:
         java-version: '11'
         distribution: 'temurin'
-
+    
     - name: Install Android SDK
       uses: android-actions/setup-android@v2
       with:
@@ -36,7 +36,7 @@ jobs:
         echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk-bundle" >> $GITHUB_ENV
         echo "PATH=$PATH:$ANDROID_NDK_HOME" >> $GITHUB_ENV
 
-    - name: Install WAF
+    - name: Install WAF and Python dependencies
       run: |
         python3 -m pip install --upgrade pip
         pip3 install waf
