@@ -1,4 +1,4 @@
-name: Android WAF Build
+name: Android WAF Build and Artifact
 
 on:
   push:
@@ -27,9 +27,7 @@ jobs:
     - name: Install Android SDK
       uses: android-actions/setup-android@v3
       with:
-        packages: |
-          - build-tools;30.0.3
-          - platforms;android-30
+        packages: "build-tools;30.0.3 platforms;android-30"
     
     - name: Configure and build with WAF (ARM64)
       run: |
