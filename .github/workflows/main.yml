@@ -27,17 +27,17 @@ jobs:
     - name: Install Android SDK
       uses: android-actions/setup-android@v3
       with:
-        api-level: 30
-        build-tools: 30.0.3
-
+        packages: |
+          build-tools;30.0.3
+          platforms;android-30
+    
     - name: Configure and build with WAF (ARM64)
       run: |
         ./waf configure --android=aarch64,clang,30 -T release
         ./waf build
 
-    - name: Upload ARM64 APK as an artifact
+    - name: Upload build directory as an artifact
       uses: actions/upload-artifact@v4
       with:
         name: revc-android-arm64-build
-        path: |
-          build/**/*.apk
+        path: build
