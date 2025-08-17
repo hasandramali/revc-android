@@ -1,4 +1,4 @@
-name: Android WAF Build
+name: Android WAF Build and Artifact (arm64)
 
 on:
   push:
@@ -10,9 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build_arm64:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -31,19 +30,14 @@ jobs:
         api-level: 30
         build-tools: 30.0.3
 
-    - name: Install NDK
+    - name: Configure and build with WAF (ARM64)
       run: |
-        echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk-bundle" >> $GITHUB_ENV
-        echo "PATH=$PATH:$ANDROID_NDK_HOME" >> $GITHUB_ENV
-
-    - name: Configure and build with WAF
-      run: |
-        ./waf configure --android
+        ./waf configure --android=arm64-v8a,clang,30
         ./waf build
 
-    - name: Find and Upload APK as an artifact
+    - name: Upload ARM64 APK as an artifact
       uses: actions/upload-artifact@v4
       with:
-        name: revc-android-build
+        name: revc-android-arm64-build
         path: |
           build/**/*.apk
